@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="找回网，全国失物信息聚合平台。让遗失的物品，回到原来的生活。">
+  <meta name="theme-color" content="#294f49">
+  <title>找回网 · 全国失物信息聚合平台</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/interaction.css">
+  <script defer src="../js/data.js"></script>
+  <script defer src="../js/app.js"></script>
+</head>
+<body>
+  <div class="utility"><div class="wrap"><span>全国失物信息聚合平台 · 自 2019 年起为您服务</span><span><i class="online"></i> 信息服务运行正常 <b>｜</b> 简体中文</span></div></div>
+  <header class="wrap header">
+    <a href="index.html" class="brand" aria-label="找回网首页"><span class="logo" aria-hidden="true">回<span>↗</span></span><span><strong>找回网<span class="brand-dot">.</span></strong><small>ZHAOHUI · LOST & FOUND</small></span></a>
+    <nav aria-label="主导航"><button class="nav active" data-nav="home">首页</button><button class="nav" data-nav="all">失物大厅</button><button class="nav" data-nav="register">拾物登记 <span>↗</span></button><button class="nav" data-nav="guide">认领须知</button></nav>
+    <span class="header-note">每一件遗失，都值得被找回。</span>
+  </header>
+  <main class="wrap">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy"><div class="eyebrow"><span></span> 让寻找，有迹可循</div><h1 id="hero-title">你丢失的，<br>也许正在这里等你。</h1><p>连接每一次遗失与拾获。<br>从一把钥匙、一只钱包，找回日常生活的一个小小缺口。</p><span class="hero-serial">PUBLIC LOST PROPERTY SERVICE / NO. 0001</span></div>
+      <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><span class="art-label">LOST, BUT NOT FORGOTTEN.</span><div class="ticket"><span class="ticket-top">找 回 网 <b>失物登记凭证</b></span><div class="ticket-content"><div class="key-drawing"><span></span></div><div><small>PROPERTY ID</small><strong>ZH–2024–0816</strong><span class="ticket-status">● 等待与失主重逢</span></div></div><div class="ticket-bottom"><span>请妥善保管此凭证</span><span class="barcode"></span></div></div><span class="art-caption">暂存于此，等待认领。 <span>↗</span></span><span class="art-number">01 / ∞</span></div>
+    </section>
+    <section class="search-section" aria-labelledby="search-title"><div class="search-intro"><h2 id="search-title">找一找，你遗失的物品</h2><span>输入物品名称、地点或登记编号</span></div><form id="search-form" class="search-form" role="search"><span class="search-icon" aria-hidden="true"></span><label class="sr-only" for="search">搜索失物</label><input id="search" type="search" placeholder="试试搜索：钱包、钥匙、校园卡……" autocomplete="off" maxlength="80" aria-controls="suggestions" aria-expanded="false" aria-autocomplete="list"><button class="search-submit" type="submit">查找失物 <span>↗</span></button></form><div id="suggestions" class="suggestions" aria-label="搜索建议" hidden></div><div class="popular"><span>常见搜索</span><button data-search="钱包">钱包</button><button data-search="钥匙">钥匙</button><button data-search="证件">证件</button><button data-search="耳机">耳机</button><span class="search-tip">多一条线索，多一点找回的可能。</span></div><div class="search-tools"><details id="history-panel" hidden><summary>最近查询 <span>↗</span></summary><div id="history-list"></div></details><button id="return-claim" type="button" hidden>返回未完成的认领表 ↗</button></div></section>
+    <div class="notice"><span class="notice-label">平台公告</span><p>认领物品前，请准备能够证明物品归属的信息。找回网不会收取任何认领费用。</p><button data-nav="guide" aria-label="查看认领须知">↗</button></div>
+    <div class="content-grid"><section class="results-area" aria-labelledby="results-title"><div class="section-heading"><div><span class="eyebrow">THE LOST PROPERTY BOARD</span><h2 id="results-title">最近拾获</h2></div><button id="show-all" class="text-link">查看全部 <span>↗</span></button></div><div id="result-meta" class="result-meta" hidden></div><div id="results" aria-busy="false"></div><div class="board-bottom"><span><i class="online"></i> 信息持续更新中</span><span>愿每一次寻找，都有回应。</span></div></section>
+    <aside class="sidebar"><section class="steps-panel"><span class="eyebrow">A LITTLE HELP</span><h2>丢了东西，别着急。</h2><p>找回一件物品，只需要这几步。</p><ol><li><span>01</span><div><strong>搜索物品信息</strong><p>用名称、地点等关键词缩小范围。</p></div></li><li><span>02</span><div><strong>核对物品特征</strong><p>仔细确认时间、地点和物品描述。</p></div></li><li><span>03</span><div><strong>提交认领申请</strong><p>提供归属证明，等待审核与联系。</p></div></li></ol><button data-nav="guide" class="text-link">了解认领流程 <span>↗</span></button></section><section class="register-panel"><span class="small-plus">＋</span><h3>你捡到了什么？</h3><p>或许有人，已经找了很久。</p><button data-nav="register">登记拾获物品 <span>↗</span></button></section><div class="archive-note"><span>档案保存提示 / 004</span><p>物品不会消失。<br>它们只是暂时还没有被找到。</p></div></aside></div>
+    <section class="closing"><span class="closing-mark">回</span><p>有些东西的价值，<br><strong>只有失去它的人知道。</strong></p><span>我们保管物品，也保管一份等待。<br>找回网，与每一位寻找者同行。</span></section>
+  </main>
+  <footer class="wrap"><div><strong>找回网.</strong><span>全国失物信息聚合平台</span></div><div class="footer-bottom"><span>© 2024 找回网 · 所有遗失，均有记录。</span><span id="staff-count">本站员工：1</span><button id="reset">清除本机记录</button></div></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="live-status" class="sr-only" role="status" aria-live="polite"></div>
+  <dialog id="modal" aria-labelledby="modal-label"><div class="modal-head"><span id="modal-label">找回网 · 信息服务</span><button id="close-modal" aria-label="关闭对话框">×</button></div><div id="modal-body"></div></dialog>
+  <dialog id="ending" class="ending" aria-labelledby="ending-title"><div class="transfer-indicator" aria-hidden="true"><span></span></div><span id="ending-status" role="status" aria-live="polite">正在审核 / VERIFYING</span><div id="ending-reveal" hidden><h2 id="ending-title">她出来了。<br>你还在里面。</h2><p id="ending-name"></p><button id="return-home">返回首页 ↗</button></div></dialog>
+</body>
+</html>
