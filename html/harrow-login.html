@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>员工自助服务</title>
+    <link rel="stylesheet" href="../css/harrow.css" />
+    <script defer src="../js/data.js"></script>
+    <script defer src="../js/journey-store.js"></script>
+    <script defer src="../js/harrow.js"></script>
+  </head>
+  <body data-page="login">
+    <header>
+      <strong>HARROW HOUSE / 馆务员工自助服务</strong>
+      <nav>
+        <a href="index.html">找回网首页</a
+        ><a href="index.html#mine">我的已收集材料</a>
+      </nav>
+    </header>
+    <main>
+      <p class="crumb">馆务系统 / 旧版员工入口</p>
+      <h1>员工登录</h1>
+      <p>本站为馆务夜班保留的旧版页面。请输入员工账号与口令。</p>
+      <form id="login-form">
+        <label
+          >员工账号<input
+            name="account"
+            autocomplete="off"
+            required
+            maxlength="50" /></label
+        ><label
+          >登录口令<input
+            name="password"
+            type="password"
+            autocomplete="off"
+            required
+            maxlength="50" /></label
+        ><label class="check"
+          ><input id="reduced-effects" type="checkbox" />
+          减少页面突变效果</label
+        ><button>登录员工工作台</button>
+      </form>
+      <p id="login-status" role="status"></p>
+      <a id="desk-link" href="harrow-desk.html" hidden
+        >验证通过，进入员工工作台 &gt;&gt;</a
+      >
+      <details>
+        <summary>旧版账号与初始口令说明</summary>
+        <p>账号采用“英文名.班次英文”格式，字母不区分大小写。请核对旧工牌。</p>
+        <p>
+          初始口令为六位数字：首次值勤的月日（MMDD），加工牌编号最后两位。值勤启用回执与工牌分开存放。
+        </p>
+      </details>
+      <p class="fine">
+        虚构员工系统，仅在本机进行剧情验证。请勿输入现实中的账号或密码。
+      </p>
+      <noscript>需要启用 JavaScript 才能保存材料和进行本机剧情验证。</noscript>
+    </main>
+    <footer>资料仅供本机查阅 · 不发送个人信息</footer>
+    <p id="page-status" role="status"></p>
+    <dialog id="file-dialog" aria-labelledby="file-title">
+      <button id="close-file" aria-label="关闭材料">×</button>
+      <div id="file-content"></div>
+    </dialog>
+  </body>
+</html>

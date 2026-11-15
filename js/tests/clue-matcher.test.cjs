@@ -46,3 +46,11 @@ test('同义写法匹配同一候选，不修改传入数据且限制输入规�
   assert.equal(JSON.stringify(candidate),before);
   assert.equal(Array.from(matcher.fold('入'.repeat(10000))).length,80);
 });
+
+test('部分别名沿用别名片段，避免无关规范名称泄露；纠错区分相邻交换',()=>{
+ const candidates=[{key:'draft',label:'未发送的草稿',forms:['danny-note']}];
+ const partial=matcher.rank('danny-not',candidates)[0];
+ assert.match(partial.text,/^dan/);assert.ok(partial.text.includes('□'));
+ assert.equal(matcher.rank('danny-note',candidates)[0].text,'未发送的草稿');
+ assert.equal(matcher.difference('入职录记','入职记录'),'order');
+});

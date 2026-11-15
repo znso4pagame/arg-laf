@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="440" viewBox="0 0 720 440">
+<rect width="720" height="440" fill="#d9d6c9"/><rect x="24" y="24" width="672" height="392" rx="7" fill="#eeece0" stroke="#6d7669" stroke-width="2"/>
+<path d="M24 95H696" stroke="#6d7669"/><text x="49" y="67" font-family="Georgia,serif" font-size="25" fill="#354c45">HARROW HOUSE</text><text x="473" y="64" font-family="monospace" font-size="15" fill="#6d7669">STAFF IDENTIFICATION</text>
+<rect x="55" y="125" width="165" height="213" fill="#bfc3b5"/><circle cx="137" cy="188" r="40" fill="#7c8776"/><path d="M76 308v-35c0-57 122-57 122 0v35" fill="#7c8776"/>
+<text x="258" y="153" font-family="monospace" font-size="15" fill="#6b7564">NAME</text><text id="badge-name" x="257" y="194" font-family="monospace" font-size="34" fill="#31453b">DANNY</text>
+<text x="258" y="238" font-family="monospace" font-size="15" fill="#6b7564">SHIFT</text><text id="badge-shift" x="257" y="273" font-family="monospace" font-size="28" fill="#31453b">NIGHT</text>
+<text x="258" y="315" font-family="monospace" font-size="15" fill="#6b7564">CARD NO.</text><text id="badge-number" x="257" y="351" font-family="monospace" font-size="28" fill="#31453b">HH-0417</text>
+<path d="M48 377H672" stroke="#b6baa9"/><text x="53" y="402" font-family="monospace" font-size="13" fill="#737b6c">PROPERTY OF THE GALLERY / DO NOT TRANSFER</text>
+</svg>

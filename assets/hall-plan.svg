@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="620" viewBox="0 0 900 620">
+<rect width="900" height="620" fill="#e9e4d5"/><g stroke="#647887" fill="none"><rect x="25" y="25" width="850" height="570"/><path d="M95 120H760V455H95Z M95 285H760 M340 120V455 M565 120V455" stroke-width="4"/><path d="M95 245h45v40 M340 245h45v40 M565 245h45v40 M520 455v-35h45" stroke-width="2"/><path d="M60 90V50H100 M80 50V100"/><path d="M760 530H875 M635 495H875 M635 495V595"/></g>
+<text x="49" y="54" fill="#4a6171" font-family="monospace" font-size="15">HARROW HOUSE / FLOOR 03</text><text x="68" y="117" fill="#4a6171" font-family="monospace" font-size="16">N</text>
+<text x="169" y="209" fill="#4a6171" font-family="monospace" font-size="21">HALL 3</text><text x="386" y="209" fill="#4a6171" font-family="monospace" font-size="19">HALL 2</text><text x="612" y="209" fill="#4a6171" font-family="monospace" font-size="19">HALL 1</text>
+<circle cx="116" cy="142" r="26" stroke="#9a503c" stroke-width="2" fill="none"/><text x="105" y="149" fill="#9a503c" font-family="monospace" font-size="21">X</text>
+<text x="61" y="507" fill="#8a5840" font-family="monospace" font-size="15">NW CORNER / INSIDE THE STRUCTURE</text><text x="650" y="520" fill="#4a6171" font-family="monospace" font-size="13">ORIGINAL PROJECT NO.</text><text id="project-number" x="662" y="568" fill="#3d586b" font-family="monospace" font-size="35">5003</text>
+<text x="60" y="559" fill="#6c7c85" font-family="monospace" font-size="14">CABINET INDEX FOLLOWS THE ORIGINAL PROJECT</text>
+</svg>

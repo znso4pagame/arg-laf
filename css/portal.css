@@ -83,7 +83,13 @@ main.wrap { background:#fff; padding:12px; border:1px solid #aac3d9; border-top:
 .clue-match-row progress::-moz-progress-bar { background:#5387af; }
 .clue-match-row p,.clue-match-note { margin:5px 0 0; color:#6c8497; font-size:11px; line-height:1.8; }
 .clue-match-note { margin-top:10px; }
+.clue-match-status { margin:10px 0 2px; color:#607f96; font-size:11px; line-height:1.8; }
 .clue-match-use { color:#24689b; padding:6px 0 0; font-size:11px; text-decoration:underline; text-underline-offset:3px; }
+#known-clues-count { display:inline-block; min-width:16px; text-align:center; padding:0 4px; border:1px solid #bfd3e3; background:#edf5fa; color:#4d7696; font:10px/1.5 Consolas,monospace; }
+#known-clues-list { display:flex; flex-wrap:wrap; gap:7px; padding-top:9px; }
+#known-clues-list button { display:flex; align-items:baseline; gap:9px; padding:5px 8px; border:1px solid #b7cee0; background:#f4f9fc; color:#30688f; font-size:11px; text-align:left; }
+#known-clues-list button small { color:#7790a3; font-size:9px; }
+#known-clues-list button:hover { background:#e6f1f9; border-color:#83adcc; }
 .search-tools { margin:0 12px 10px; }
 .search-tools:has(>:not([hidden])) { margin-top:10px; padding-top:7px; border-color:#dbe5ed; }
 .search-tools summary,#return-claim { font-size:11px; color:#346c96; }
@@ -305,3 +311,5 @@ dialog { border:2px solid #7fa2bf; border-radius:0; background:#f8fbfd; padding:
   .intro-bottom>p { flex-basis:100%; }
   .guide-document { margin:12px auto; }
 }
+/* 已收集材料与自己的推测 */
+.notebook-mode .hero,.notebook-mode .search-section,.notebook-mode .notice,.notebook-mode .sidebar,.notebook-mode .closing,.notebook-mode #application-panel{display:none!important}.notebook-mode .content-grid{display:block}.notebook-top{display:flex;justify-content:space-between;gap:20px;align-items:center}.notebook-tabs,.compare-toolbar,.notebook-card-actions{display:flex;flex-wrap:wrap;gap:12px;padding:14px 0}.notebook-tabs button,.compare-toolbar button,.notebook-card button{padding:5px 10px;border:1px solid #a7bdce;background:#eff5fa;color:#245d8e;cursor:pointer}.notebook-tabs [aria-pressed=true]{background:#245d8e;color:white}.notebook-card{margin:12px 0;border:1px solid #b5c8d6;padding:18px;background:#fff}.notebook-card-head{display:flex;justify-content:space-between;color:#71879a;font-size:12px}.notebook-card h3{margin:10px 0}.notebook-card small{color:#6d7e89}.notebook-card blockquote{border-left:3px solid #ccad6c;padding:10px;background:#faf7ed;margin:12px 0;white-space:pre-wrap}.notebook-card-actions label{margin-left:auto}.personal-note p{white-space:pre-wrap}.personal-label{display:grid;gap:8px;margin-top:25px}.personal-label textarea{min-height:110px;font:inherit;padding:12px;border:1px solid #9db5c9}.evidence-image{display:block;width:100%;height:auto;margin:18px 0;border:1px solid #b3c5ce}.comparison-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px}.comparison-columns section{min-width:0}.comparison-table{border-collapse:collapse;width:100%;font-size:13px;margin:20px 0}.comparison-table th,.comparison-table td{border:1px solid #b7c8d2;padding:8px;text-align:left}.source-note{font-size:12px;color:#7b8790}#application-panel{padding:24px;margin:25px 0;border:1px solid #a3b8c9;background:#f3f6f8}#application-panel h2{font-size:21px}.claim-form{display:grid;gap:15px;max-width:550px}.claim-form label{display:grid;gap:8px}.claim-form input{border:1px solid #a3b8c9;padding:9px;font:inherit}.claim-terms{font-size:13px;line-height:1.8}#match-toggle{font-size:12px;color:#5e7281}.portal-item-symbol{font-size:34px;color:#7998b1}.collected-search{padding:20px;border-top:1px dashed #c1d0db}.suggestion-response{padding:8px 15px;font-size:13px;color:#667988}@media(max-width:650px){.comparison-columns{grid-template-columns:1fr}.notebook-top{display:block}.notebook-card-actions label{margin-left:0}.comparison-table{font-size:11px}}

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>馆务工作台</title>
+    <link rel="stylesheet" href="../css/harrow.css" />
+    <script defer src="../js/data.js"></script>
+    <script defer src="../js/journey-store.js"></script>
+    <script defer src="../js/harrow.js"></script>
+  </head>
+  <body data-page="desk">
+    <header>
+      <strong>HARROW HOUSE / 员工工作台</strong>
+      <nav>
+        <a href="index.html">找回网首页</a
+        ><a href="index.html#mine">我的已收集材料</a>
+      </nav>
+    </header>
+    <main>
+      <div id="desk-locked" hidden>
+        <h1>员工会话未建立</h1>
+        <p>请先通过旧版登录入口建立本机会话。</p>
+        <a href="harrow-login.html">返回登录</a>
+      </div>
+      <div id="desk-content" hidden>
+        <p class="crumb">馆务系统 / NIGHT / DANNY</p>
+        <h1>Danny 的工作台</h1>
+        <p class="fine">最近同步：2019-11-03 23:41 · 三份附件未归档</p>
+        <div class="file-grid">
+          <button data-open="night">
+            值勤记录<br /><small>11 月 3 日夜班日志</small></button
+          ><button data-open="draft">
+            未发送草稿<br /><small>收件人留空</small></button
+          ><button data-open="plan">
+            扫描附件<br /><small>3 号厅楼层图</small>
+          </button>
+        </div>
+        <section>
+          <h2>旧档案柜索引</h2>
+          <p>柜号沿用原始施工编号。夜班日志保留了编号来源。</p>
+          <form id="cabinet-form">
+            <label
+              >档案柜编号<input
+                name="code"
+                inputmode="numeric"
+                maxlength="12"
+                required /></label
+            ><button>调取档案柜</button>
+          </form>
+          <p id="cabinet-status" role="status"></p>
+          <a id="archive-link" href="archive-room.html" hidden
+            >索引已定位，进入归档室 &gt;&gt;</a
+          >
+        </section>
+        <button id="logout" class="secondary">退出员工会话</button>
+      </div>
+      <noscript>需要启用 JavaScript 才能保存材料和进行本机剧情验证。</noscript>
+    </main>
+    <footer>资料仅供本机查阅 · 不发送个人信息</footer>
+    <p id="page-status" role="status"></p>
+    <dialog id="file-dialog" aria-labelledby="file-title">
+      <button id="close-file" aria-label="关闭材料">×</button>
+      <div id="file-content"></div>
+    </dialog>
+  </body>
+</html>

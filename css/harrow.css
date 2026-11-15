@@ -1,0 +1,250 @@
+:root {
+  font-family: Tahoma, "Microsoft YaHei", sans-serif;
+  color: #27352e;
+  background: #d9ddd5;
+  font-size: 15px;
+  line-height: 1.75;
+}
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+}
+header,
+main,
+footer {
+  width: min(960px, 94%);
+  margin: auto;
+}
+header {
+  background: #354b3e;
+  color: #edf1e8;
+  padding: 20px 26px;
+  border-bottom: 5px solid #9ba98c;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+header strong {
+  letter-spacing: 2px;
+}
+nav {
+  display: flex;
+  gap: 20px;
+}
+nav a {
+  color: #e2e8da;
+}
+main {
+  padding: 28px 34px 50px;
+  background: #f5f4eb;
+  min-height: 75vh;
+  border: 1px solid #a5afa0;
+}
+footer {
+  font-size: 12px;
+  padding: 16px;
+  color: #52604f;
+}
+h1 {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 29px;
+  margin: 12px 0 18px;
+}
+h2 {
+  font-size: 19px;
+  border-bottom: 1px solid #a9b4a1;
+  padding-bottom: 8px;
+}
+section {
+  margin: 28px 0;
+  padding: 16px 20px;
+  border: 1px solid #b3bca9;
+  background: #e9ecdf;
+}
+a {
+  color: #345e46;
+  text-underline-offset: 4px;
+}
+a:hover {
+  color: #8a4b27;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  padding: 8px 17px;
+  border: 1px solid #526b50;
+  border-radius: 0;
+  background: linear-gradient(#f7f8ee, #d2dcc7);
+  color: #263e2b;
+  box-shadow: inset 1px 1px white;
+}
+button:hover {
+  background: #e1e8d7;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+input,
+select,
+textarea {
+  font: inherit;
+  padding: 8px;
+  border: 1px solid #8b9b85;
+  background: #fffef7;
+  color: #27352e;
+  max-width: 100%;
+}
+label {
+  display: grid;
+  gap: 5px;
+  margin: 12px 0;
+}
+form {
+  max-width: 540px;
+}
+input:not([type="checkbox"]) {
+  width: 100%;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.crumb,
+.fine {
+  font-size: 12px;
+  color: #65715e;
+}
+.evidence-image {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  height: auto;
+  margin: 20px auto;
+  border: 1px solid #7c8b76;
+}
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.file-grid button {
+  text-align: left;
+  padding: 20px;
+}
+.comparison-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.comparison-columns article {
+  padding: 18px;
+  border: 1px solid #9dad93;
+}
+dl {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+}
+dt {
+  font-size: 13px;
+  opacity: 0.7;
+}
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+dialog {
+  width: min(800px, 94%);
+  max-height: 88vh;
+  overflow: auto;
+  background: #f3f2e8;
+  color: #27352e;
+  border: 2px solid #64755b;
+  padding: 30px;
+}
+dialog::backdrop {
+  background: #15271dbb;
+}
+#close-file {
+  float: right;
+}
+#page-status {
+  position: fixed;
+  bottom: 12px;
+  left: 3%;
+  background: #f5f4eb;
+  padding: 4px 15px;
+  border: 1px solid #a5afa0;
+}
+#page-status:empty {
+  display: none;
+}
+.return-application {
+  display: block;
+  margin: 30px 0;
+  font-weight: bold;
+}
+body[data-page="archive"] {
+  background: #071511;
+  color: #c1d3b7;
+  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+}
+body[data-page="archive"] main {
+  background: #10241b;
+  border-color: #3c5847;
+}
+body[data-page="archive"] section {
+  background: #142c20;
+  border-color: #466246;
+}
+body[data-page="archive"] a {
+  color: #b8ce98;
+}
+body[data-page="archive"] h2 {
+  border-color: #466246;
+}
+body[data-page="archive"] .crumb {
+  color: #8eac86;
+}
+#archive-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  background: #07110b;
+  color: #dbe5c9;
+  font-size: clamp(22px, 5vw, 45px);
+  pointer-events: none;
+}
+#archive-transition small {
+  font-size: 14px;
+  letter-spacing: 3px;
+}
+@media (max-width: 650px) {
+  main {
+    padding: 20px 16px;
+  }
+  .comparison-columns {
+    grid-template-columns: 1fr;
+  }
+  header {
+    padding: 15px;
+  }
+  dl {
+    grid-template-columns: 90px 1fr;
+  }
+}
+:focus-visible {
+  outline: 3px solid #b97c2b;
+  outline-offset: 3px;
+}
