@@ -10,7 +10,7 @@ function buildSite(destination = path.join(root, '_site')) {
   if (out === root || [path.join(root,'html'),path.join(root,'css'),path.join(root,'js')].includes(out)) throw new Error('不能把构建输出写入源码目录');
   fs.rmSync(out, { recursive: true, force: true });
   for (const dir of ['html','css','js']) fs.mkdirSync(path.join(out,dir), { recursive: true });
-  const assets = [...fs.readdirSync(path.join(root,'css')).filter(x => x.endsWith('.css')).map(x => `css/${x}`), 'js/app.js', 'js/data.js'];
+  const assets = [...fs.readdirSync(path.join(root,'css')).filter(x => x.endsWith('.css')).map(x => `css/${x}`), 'js/app.js', 'js/data.js', 'js/clue-matcher.js'];
   const manifest = {};
   for (const file of assets) {
     const contents = fs.readFileSync(path.join(root,file));

@@ -7,10 +7,10 @@ const { JSDOM } = require('jsdom');
 const root = path.resolve(__dirname, '../..');
 const storageKey = 'zhaohui-story-v1';
 const html = fs.readFileSync(path.join(root, 'html/index.html'), 'utf8');
-const source = ['js/data.js', 'js/app.js'].map(file => fs.readFileSync(path.join(root, file), 'utf8'));
+const source = ['js/data.js', 'js/clue-matcher.js', 'js/app.js'].map(file => fs.readFileSync(path.join(root, file), 'utf8'));
 
 // 离线执行真实 DOM 事件。虚拟时钟让取消请求、逐条建议和转场可确定地验证。
-function boot(t, { saved, reduced = false, storageBlocked = false, showOpening = false, introSeen = false, navType = 'navigate', guideReturn = false } = {}) {
+function boot(t, { saved, reduced = false, storageBlocked = false, showOpening = false, introSeen = false, navType = 'navigate', guideReturn = false, matcherUnavailable = false } = {}) {
   const dom = new JSDOM(html, { url: 'https://zhaohui.test/html/index.html', runScripts: 'outside-only' });
   const w = dom.window, d = w.document, errors = [];
   let time = 0, serial = 0;
@@ -28,7 +28,7 @@ function boot(t, { saved, reduced = false, storageBlocked = false, showOpening =
   if (saved) w.localStorage.setItem(storageKey, typeof saved === 'string' ? saved : JSON.stringify(saved));
   if (introSeen) w.localStorage.setItem('zhaohui-intro-v1', 'read');
   if (storageBlocked) Object.defineProperty(w, 'localStorage', { get() { throw new Error('Storage denied'); } });
-  source.forEach(s => w.eval(s));
+  source.forEach((s,i) => {if(!matcherUnavailable||i!==1)w.eval(s);});
   // 既有回归用例从自主查档开始；开场用例保留真实首次进入状态。
   if (!showOpening && d.querySelector('#intro').open) d.querySelector('#intro-skip').click();
   t.after(() => { assert.deepEqual(errors, [], '没有未处理的 DOM 异常'); dom.window.close(); });
@@ -403,6 +403,64 @@ test('搜索“不签”或离开相关措辞只是提问，不会替玩家触�
   a.route();a.search('不填');assert.equal(a.state().ending,'');
   a.search('我要关了');assert.equal(a.state().ending,'');
   a.search('认领表');a.click('#leave');assert.equal(a.state().ending,'');a.click('#cancel-review');assert.equal(a.state().ending,'');
+});
+
+test('线索校对按 50%、70%、完整三级递进，部分提示不暴露完整目标',t=>{
+  const a=boot(t);for(const q of ['钱包','你是谁','你在哪','B3'])a.search(q);
+  const before=JSON.stringify({seen:a.state().seen,leads:a.state().leads,heard:a.state().heard});
+  a.input('#search','入职');assert.equal(a.$('#clue-match').hidden,false);
+  assert.equal(a.$('.clue-match-stage').textContent,'A');
+  assert.equal(a.$('.clue-match-percent').textContent,'50%');
+  assert.doesNotMatch(a.$('#clue-match-results').textContent,/入职记录/);
+  assert.equal(a.$('#clue-match-results [data-search]'),null);
+  a.input('#search','入职记');assert.equal(a.$('.clue-match-stage').textContent,'AB');
+  assert.equal(a.$('.clue-match-percent').textContent,'75%');
+  assert.equal(a.$('#clue-match-results [data-search]'),null);
+  a.input('#search','入职记录');assert.equal(a.$('.clue-match-stage').textContent,'ABC');
+  assert.equal(a.$('.clue-match-percent').textContent,'100%');
+  assert.equal(JSON.stringify({seen:a.state().seen,leads:a.state().leads,heard:a.state().heard}),before);
+  a.click('#clue-match-results [data-search]');a.tick();assert.match(a.$('#results').textContent,/人员档案/);
+});
+
+test('错字可得到接近提示，隐藏索引的匹配度不会被泄露',t=>{
+  const a=boot(t);a.input('#search','岗位职');assert.equal(a.$('#clue-match').hidden,true);
+  a.input('#search','B3');assert.equal(a.$('#clue-match').hidden,true);
+  for(const q of ['钱包','你是谁','你在哪','B3'])a.search(q);
+  a.input('#search','入职纪录');assert.equal(a.$('.clue-match-stage').textContent,'AB');
+  assert.equal(a.state().seen.includes('入职记录'),false);
+  a.input('#search','0003');assert.doesNotMatch(a.$('#clue-match-results').textContent,/0003/);
+  a.input('#search','岗位职责');assert.doesNotMatch(a.$('#clue-match-results').textContent,/岗位职责/);
+});
+
+test('完整标点写法可正常提交，输入法组合输入时不误判',t=>{
+  const a=boot(t);for(const q of ['钱包','你是谁','你在哪','B3'])a.search(q);
+  a.$('#search').dispatchEvent(new a.w.CompositionEvent('compositionstart',{bubbles:true}));
+  a.input('#search','入职记');assert.equal(a.$('#clue-match').hidden,true);
+  a.$('#search').dispatchEvent(new a.w.CompositionEvent('compositionend',{bubbles:true}));
+  assert.equal(a.$('.clue-match-stage').textContent,'AB');
+  a.search('入，职，记，录');assert.match(a.$('#results').textContent,/人员档案/);
+  assert.equal(a.$('#clue-match').hidden,true);
+});
+
+test('清空、回首页和结局都收起线索校对，不覆盖小鹿的回应',t=>{
+  const a=boot(t);a.input('#search','钱');assert.equal(a.$('#clue-match').hidden,false);
+  a.$('#search').dispatchEvent(new a.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(a.$('#clue-match').hidden,true);
+  a.input('#search','');assert.equal(a.$('#clue-match').hidden,true);
+  a.input('#search','钱');a.click('[data-nav="home"]');assert.equal(a.$('#clue-match').hidden,true);
+  a.route();a.search('岗位职责');a.input('#search','入职记');assert.equal(a.$('#clue-match').hidden,true);
+  a.search('认领表');a.click('#leave');a.click('#confirm-leave');
+  a.input('#search','钱包');assert.equal(a.$('#clue-match').hidden,true);
+});
+
+test('尚未显示的地点名不会因为输入接近而提前暴露',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁');a.search('你在哪',false);a.tick(400);
+  a.input('#search','员工通');assert.equal(a.$('#clue-match').hidden,true);
+  assert.equal(a.state().leads.includes('员工通道'),false);
+});
+
+test('旧缓存未加载匹配脚本时，原有查询和开场仍能正常运行',t=>{
+  const a=boot(t,{matcherUnavailable:true});a.input('#search','钱');assert.equal(a.$('#clue-match').hidden,true);
+  a.route();assert.ok(a.$('#claim-form'));assert.equal(a.state().ending,'');
 });
 
 test('线上打包包含独立说明页和内容指纹，所有引用都能解析',()=>{

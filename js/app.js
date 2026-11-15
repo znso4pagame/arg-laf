@@ -2,6 +2,7 @@
   'use strict';
   const $ = selector => document.querySelector(selector);
   const data = window.ZHAOHUI;
+  const clueMatcher = window.ZHAOHUI_MATCHER;
   const key = 'zhaohui-story-v1';
   const introKey = 'zhaohui-intro-v1';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -192,7 +193,8 @@
     const compact=term.replace(/[\s，,、]/g,'');
     if(/^(?:(?:如果|要是|那么|那))?(?:我)?认领你(?:之后|以后|后)?(?:我)?(?:会怎么样|会怎样|会发生什么|会有什么后果)$/.test(compact)) term=state.seen.includes('认领表')?'岗位职责':'认领后会怎样';
     if(/^(?:我是不是会|我会不会|是不是会)(?:变成你|接替你)$/.test(compact)) term=state.seen.includes('认领表')?'岗位职责':'认领后会怎样';
-    const canonical = Object.keys(data.clues).concat(Object.keys(data.aliases)).find(x => x.toLowerCase() === term.toLowerCase());
+    const fold = value => clueMatcher ? clueMatcher.fold(value) : value.toLowerCase();
+    const canonical = Object.keys(data.clues).concat(Object.keys(data.aliases)).find(x => fold(x) === fold(term));
     term = canonical || term;
     return Object.hasOwn(data.aliases, term) ? data.aliases[term] : term;
   }
@@ -292,6 +294,59 @@
     if(!canOffer(term))return false;
     return state.seen.includes(term) || !data.indexTerms.includes(term) || state.leads.includes(term);
   }
+  function clearClueMatch() {
+    const panel=$('#clue-match'); if(panel)panel.hidden=true;
+    const results=$('#clue-match-results'); if(results)results.replaceChildren();
+  }
+  function matchCandidates() {
+    if(state.ending || state.seen.includes('岗位职责'))return [];
+    const candidates=new Map();
+    const addPublic=label=>{
+      if(!label)return;
+      const term=normalize(label);if(Object.hasOwn(data.clues,term)&&!canAccess(term))return;
+      candidates.set('public:'+label,{key:'public:'+label,label,forms:[label],query:label});
+    };
+    addPublic(state.original);
+    for(const item of allItems()) {
+      for(const label of [item.name,...(item.type!=='其他'?[item.type]:[])]) {
+        addPublic(label);
+      }
+    }
+    const known=new Set([...state.leads,...state.seen]);
+    const hint=currentHint(); if(hint)known.add(normalize(data.hints[hint].keyword));
+    for(const value of known) {
+      const term=normalize(value); if(!Object.hasOwn(data.clues,term)||!canAccess(term))continue;
+      const label=term==='我是小鹿'?'小鹿':term;
+      const forms=[term,label,...Object.keys(data.aliases).filter(alias=>data.aliases[alias]===term)];
+      candidates.set('clue:'+term,{key:'clue:'+term,label,forms,query:term});
+    }
+    return [...candidates.values()];
+  }
+  function updateClueMatch(query) {
+    clearClueMatch();
+    const panel=$('#clue-match'),results=$('#clue-match-results');
+    if(!clueMatcher||!panel||!results||!clueMatcher.fold(query)||state.ending||state.seen.includes('岗位职责'))return;
+    const candidates=matchCandidates();
+    const matches=clueMatcher.rank(query,candidates);
+    if(!matches.length)return;
+    panel.hidden=false;
+    for(const match of matches) {
+      const row=document.createElement('div');row.className='clue-match-row';row.dataset.level=String(match.level);
+      // 部分匹配的 DOM 不包含完整关键词或可查询目标，避免不经意揭底。
+      const title=document.createElement('div');title.className='clue-match-summary';
+      const stage=document.createElement('strong');stage.className='clue-match-stage';stage.textContent=match.stage;
+      const fragment=document.createElement('span');fragment.className='clue-match-fragment';fragment.textContent=match.text;
+      const percent=document.createElement('span');percent.className='clue-match-percent';percent.textContent=`${match.percent}%`;
+      title.append(stage,fragment,percent);row.append(title);
+      const progress=document.createElement('progress');progress.max=100;progress.value=match.percent;progress.setAttribute('aria-label','线索匹配度');row.append(progress);
+      const note=document.createElement('p');note.textContent=match.level===3?'完整匹配，可以使用这条线索查询。':match.level===2?'接近一个已知方向，再核对剩余文字。':'找到部分相近文字，可以继续补全。';row.append(note);
+      if(match.level===3) {
+        const candidate=candidates.find(c=>c.key===match.key);
+        const button=document.createElement('button');button.type='button';button.className='clue-match-use';button.dataset.search=candidate.query;button.textContent='使用线索查询 >>';row.append(button);
+      }
+      results.append(row);
+    }
+  }
   function revealRecordLinks() {
     for(const link of $('#results').querySelectorAll('[data-search]')) {
       const term=normalize(link.dataset.search);
@@ -385,7 +440,7 @@
   function search(raw, {resume = false} = {}) {
     const query = String(raw).trim().slice(0,80);
     if (!query) { $('#search').focus(); return; }
-    cancelPending();
+    cancelPending();clearClueMatch();
     const id = requestId;
     $('#search').value = query; activeQuery = query;
     $('#results-title').textContent = '查询结果';
@@ -438,7 +493,7 @@
     },380);
   }
   function home(all = false, remember = true) {
-    cancelPending();activeQuery='';state.screen=all?'all':'home';
+    cancelPending();clearClueMatch();activeQuery='';state.screen=all?'all':'home';
     $('#results-title').textContent=all?'失物大厅':'最近拾获';$('#result-meta').hidden=true;
     showSuggestions(false);$('#search').value='';board();animateResults();
     document.body.classList.remove('archive-mode');
@@ -579,16 +634,17 @@
     cancelPending();
     if (interrupted) { setMeta('旧查询已取消，请提交新的关键词。'); announce('旧查询已取消。'); }
     const q = $('#search').value.trim();
-    if (!q) { showSuggestions(false); return; }
+    if (!q) { showSuggestions(false);clearClueMatch();return; }
     suggestions(matchesFor(q).slice(0,4).map(item => item.name),q);
+    updateClueMatch(q);
   };
-  $('#search').addEventListener('compositionstart', () => { composing = true; cancelPending(); showSuggestions(false); });
+  $('#search').addEventListener('compositionstart', () => { composing = true; cancelPending(); showSuggestions(false);clearClueMatch(); });
   $('#search').addEventListener('compositionend', () => { composing = false; inputSuggestions(); });
   $('#search').addEventListener('input', () => { if (!composing) inputSuggestions(); });
   $('#search').addEventListener('focus', () => { if ($('#suggestions').children.length && $('#search').value.trim() && !composing) showSuggestions(true); });
   $('#search').addEventListener('keydown', event => {
     if (composing || event.isComposing) return;
-    if (event.key === 'Escape') { suggestionId++; showSuggestions(false); }
+    if (event.key === 'Escape') { suggestionId++; showSuggestions(false);clearClueMatch(); }
     if (event.key === 'ArrowDown' && !$('#suggestions').hidden) { event.preventDefault(); $('#suggestions button')?.focus(); }
   });
   $('#suggestions').addEventListener('keydown', event => {
@@ -598,7 +654,7 @@
       if (event.key === 'ArrowUp' && i === 0) $('#search').focus();
       else buttons[(i + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
     }
-    if (event.key === 'Escape') { $('#search').focus(); suggestionId++; showSuggestions(false); }
+    if (event.key === 'Escape') { $('#search').focus(); suggestionId++; showSuggestions(false);clearClueMatch(); }
   });
   document.addEventListener('click', event => {
     if (!event.target.closest('.search-section')) { suggestionId++; showSuggestions(false); }

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../css/interaction.css">
   <link rel="stylesheet" href="../css/portal.css">
   <script defer src="../js/data.js"></script>
+  <script defer src="../js/clue-matcher.js"></script>
   <script defer src="../js/app.js"></script>
 </head>
 <body>
@@ -25,6 +26,7 @@
       <div class="hero-art"><div class="portal-bulletin"><h2>服务提示</h2><p>· 本站不收取认领费用<br>· 认领前请核对物品特征<br>· 部分历史记录保留原始编号</p><a href="guide.html">第一次使用？请阅读网站说明 &gt;&gt;</a></div></div>
     </section>
     <section class="search-section" aria-labelledby="search-title"><div class="search-intro"><h2 id="search-title">失物信息查询</h2><span>输入物品名称、地点或登记编号</span><a id="read-intro" class="intro-link" href="guide.html">新用户必读 · 入站小记 &gt;&gt;</a></div><div id="search-objective" class="search-objective" hidden><span>此行所寻</span><strong id="objective-name"></strong><button id="ask-property" type="button" data-search="我的东西" hidden>追问我的失物 &gt;&gt;</button><span>先核对登记，再循线查阅。</span></div><form id="search-form" class="search-form" role="search"><span class="search-icon" aria-hidden="true"></span><label class="sr-only" for="search">搜索失物</label><input id="search" type="search" placeholder="试试搜索：钱包、钥匙、校园卡……" autocomplete="off" maxlength="80" aria-controls="suggestions" aria-expanded="false" aria-autocomplete="list"><button class="search-submit" type="submit">查找失物 <span>↗</span></button></form><div id="suggestions" class="suggestions" aria-label="搜索建议" hidden></div><div class="popular"><span>常见搜索</span><button data-search="钱包">钱包</button><button data-search="钥匙">钥匙</button><button data-search="证件">证件</button><button data-search="耳机">耳机</button><span class="search-tip">支持名称 / 地点 / 登记编号查询</span></div><button id="resume-reply" class="resume-reply" type="button" hidden></button><div class="search-tools"><details id="history-panel" hidden><summary>最近查询 <span>↗</span></summary><div id="history-list"></div></details><button id="return-claim" type="button" hidden>返回未完成的认领表 ↗</button></div>
+      <section id="clue-match" class="clue-match" aria-labelledby="clue-match-title" hidden><div class="clue-match-heading"><h3 id="clue-match-title">线索匹配</h3><span>50% · A　70% · AB　100% · ABC</span></div><div id="clue-match-results" aria-live="polite" aria-atomic="true"></div><p class="clue-match-note">仅校对已经开放的线索。片段提示不会自动发起查询。</p></section>
       <section id="field-guide" class="field-guide" aria-labelledby="guide-title">
         <div class="guide-heading"><span class="guide-mark" aria-hidden="true">?</span><div><h3 id="guide-title">检索帮助</h3><span>遇到困难时，逐级查看提示。</span></div><button id="hint-toggle" type="button" aria-controls="hint-content" aria-expanded="false">查看提示 <span aria-hidden="true">＋</span></button></div>
         <div id="hint-content" class="guide-content" hidden><div class="guide-pagination"><span id="hint-tier">第 1 级 · 观察</span><span id="hint-count">01 / 03</span></div><p id="hint-body" role="status" aria-live="polite"></p><div class="guide-actions"><button id="hint-next" type="button">再明确一点 ↗</button><button id="hint-search" type="button" hidden></button><span>按需查看，不必全部展开。</span></div></div>
