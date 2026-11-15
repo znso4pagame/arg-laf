@@ -5,7 +5,7 @@
   const key = 'zhaohui-story-v1';
   const introKey = 'zhaohui-intro-v1';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const fresh = () => ({ seen: [], level: 0, original: '', ending: '', name: '', waiting: false, history: [], hintLevels: {}, draft: { name: '', reason: '' }, registrations: [], applications: {}, badgeVisits: 0 });
+  const fresh = () => ({ schema: 2, anomalySeen: false, lastClue: '', seen: [], level: 0, original: '', ending: '', name: '', waiting: false, history: [], hintLevels: {}, draft: { name: '', reason: '' }, registrations: [], applications: {}, badgeVisits: 0 });
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let storageAvailable = true;
   function readState(raw) {
@@ -18,7 +18,20 @@
       next.ending = ['left', 'claimed'].includes(saved.ending) ? saved.ending : '';
       next.name = typeof saved.name === 'string' ? saved.name.slice(0, 30) : '';
       next.original = typeof saved.original === 'string' ? saved.original.slice(0, 80) : '';
-      next.waiting = saved.waiting === true;
+      next.anomalySeen = saved.anomalySeen === true || !!saved.original || next.seen.length > 0;
+      // 旧版只按层级放行；迁移已读证据的前置关系，保留旧进度与结局。
+      if (saved.schema !== 2) {
+        const addParents = term => {
+          const clue = data.clues[term]; if (!clue) return;
+          for (const parent of [...(clue.after || []), ...(clue.any?.length ? [clue.any[0]] : [])]) {
+            if (!next.seen.includes(parent)) { next.seen.push(parent); addParents(parent); }
+          }
+        };
+        next.seen.slice().forEach(addParents);
+      }
+      next.level = Math.max(0, ...next.seen.map(term => data.clues[term]?.level || 0));
+      next.lastClue = next.seen.includes(saved.lastClue) ? saved.lastClue : next.seen.at(-1) || '';
+      next.waiting = next.seen.includes('岗位职责') && !next.ending;
       next.history = Array.isArray(saved.history) ? saved.history.filter(x => typeof x === 'string').slice(-12) : [];
       if (saved.hintLevels && typeof saved.hintLevels === 'object') {
         for (const [id, level] of Object.entries(saved.hintLevels)) {
@@ -37,8 +50,14 @@
   let introSeen = false;
   try { introSeen = localStorage.getItem(introKey) === 'read'; } catch { storageAvailable = false; }
   const save = () => { try { localStorage.setItem(key, JSON.stringify(state)); } catch { storageAvailable = false; } };
-  function resolveDeparture() {
-    if (state.waiting && !state.ending) { state.ending = 'left'; state.waiting = false; state.draft = fresh().draft; save(); }
+  function resolveDeparture(back = false) {
+    let internal = false;
+    try { internal = sessionStorage.getItem('zhaohui-guide-return') === '1'; sessionStorage.removeItem('zhaohui-guide-return'); } catch { internal = true; /* 无法区分站内跳转时，保守恢复而不是代替玩家作出选择。 */ }
+    const navigation = performance.getEntriesByType?.('navigation')?.[0]?.type;
+    // 阅读申请、刷新、查阅说明都不等于放弃；只在摊牌后离开再回来时归档。
+    if (state.waiting && !state.ending && !internal && (back || navigation === 'navigate' || navigation === 'back_forward')) {
+      state.ending = 'left'; state.waiting = false; state.draft = fresh().draft; save();
+    }
   }
   resolveDeparture();
   let requestId = 0, suggestionId = 0, endingId = 0, toastTimer;
@@ -125,23 +144,40 @@
     $('#results').innerHTML = `<div class="empty"><span class="error-number">404</span><h3>未找到对应记录</h3><p>${blocked ? '当前索引中没有可供访问的信息。' : '该信息可能已被移交、归档，或从未存在。'}<br>请检查关键词，或尝试其他搜索建议。</p></div>`;
   }
   function renderPage(page) {
-    const next = (word, text) => `<button class="record-action" data-search="${word}">${text} ↗</button>`;
+    const next = (word, text) => `<button class="record-action" data-search="${escape(word)}">${escape(text)} &gt;&gt;</button>`;
     switch (page) {
-      case 'badge': record('工牌 / 0001', [['物品编号','0001'],['物品描述','客服工牌，姓名栏已磨损。'],['拾获地点','找回网总部，B3 层，员工通道尽头'],['拾获时间',state.badgeVisits++ % 2 ? '2019-06-11' : '2024-03-14'],['当前状态','待认领']], '背面有一行字：请勿将工牌带离工作区域。', next('入职记录','查询关联记录')); break;
-      case 'employee1': record('员工记录 / 0001', [['姓名','小鹿'],['入职时间','2024-03-14'],['岗位','远程客服'],['当前状态','未归档'],['身份信息','未检索到有效身份']], '此记录与招聘日期不一致。系统时间校验已停用。', next('0002','查看上一条记录')); break;
-      case 'employee2': case 'employee3': { const n = page === 'employee2' ? '0002' : '0003'; record(`归档员工记录 / ${n}`, [['姓名',n === '0002' ? 'Danny' : '信息缺失'],['入职时间','2019-06-11'],['当前状态','已归档'],['认领人编号',n === '0002' ? '0003' : '0004']], '该员工已被认领。原岗位职责已转移至认领人。', next(n === '0002' ? '0003' : '你懂了吗','继续查询')); break; }
-      case 'category': record('分类指南 / 类别 E', [['分类名称','E — 以上皆不符合'],['启用时间','1974-11-03'],['公开状态','不对外公开'],['适用案件','Elias Rook / 5003']], '无法确定其属于人或物品时，请勿自行更改分类。建议移交失物招领处处理。', next('Elias Rook','调阅 5003 号档案')); break;
-      case 'rook': record('未拾获物品 / 5003', [['登记名称','Elias Rook'],['年龄 / 职业','34 岁 / 制图员'],['失踪时间','1974-11-03'],['地点','Harrow House，3 号厅西北角，建筑结构内部'],['类别 / 状态','E / 待拾获']], '市政档案原结论：擅自离岗。另存版本：未结案，建议移交失物招领处处理。附注（2019 / Danny）：它一直在布展。它布的是它自己出来的路。', next('上一个','查询相关人员')); break;
-      case 'recruit': record('远程客服招聘 / 历史快照', [['发布日期','2019-06-11'],['岗位','失物登记审核、用户查询回复'],['薪酬','市场平均薪资的三倍'],['办公地点','远程 / 以实际分配为准']], '入职后领取工牌。签署合同即视为同意全部岗位安排。', next('合同','查看合同索引')); break;
-      case 'cache': $('#results').innerHTML = `<article class="record"><div class="record-header"><span>CACHE / 2019-11-03</span><span>恢复片段 04</span></div><h3>客服对话缓存</h3><div class="chat-line"><span>Danny / 0002</span>我认领你之后，我会怎么样？</div><div class="chat-line"><span>小鹿 / 0001</span>不会怎样。</div><div class="chat-line"><span>Danny / 0002</span>那你告诉我实话。</div><p class="record-note">[对话中断] 客服已离线。<br>0003 关联认领申请：认领人姓名栏为空。</p>${next('他走了','继续查询')}</article>`; break;
-      case 'property': record(state.original || '你的失物', [['物品编号','B3-0000'],['拾获地点','B3 层，失物架'],['当前状态','待认领'],['放行条件','需客服 0001 审核']], '记录来源无法验证。请联系当前客服完成审核。', next('审核','查询审核要求')); break;
+      case 'badge':
+        record('工牌登记 / 0001', [['物品编号','0001'],['物品描述','客服工牌，姓名栏已磨损'],['拾获地点','B3 层，员工通道尽头'],['原始登记日期','2019-06-11'],['当前转录批次','2024-03-14'],['当前状态','暂存']], '原件日期与页面转录日期分列保存。关联人员档案仍可查阅。', next('入职记录','查询工牌持有人')); break;
+      case 'employee1':
+        record('人员档案 / 客服 0001', [['姓名','小鹿'],['入职日期','2019-06-11'],['岗位','远程客服'],['状态','未归档'],['关联旧登记','流水号 0002（不是客服工号）']], '本页编号 0001 为工号，旧登记 0002、0003 为历史流水号。请勿混用。', next('0002','调阅历史登记 0002')); break;
+      case 'employee2':
+        record('历史签收凭据 / 0002', [['登记日期','2019-02-18'],['类别','E'],['受领对象','原名称缺失'],['签收人代号','Q-17'],['签收状态','已完成'],['后续记录','0003']], '签收完成后，系统另生成一份登记。签收人与后续登记对象之间的关系尚需核对。', next('0003','对照后续登记 0003')); break;
+      case 'employee3':
+        record('后续登记 / 0003', [['登记日期','2019-02-18'],['物品名称','Q-17'],['类别','E'],['最终状态','已归档'],['来源凭据','0002'],['协查附件','Danny / D-2019']], 'Q-17 同时出现在上一份凭据的签收人栏与本页的物品名称栏。附件保留一位协查者的记录。', next('上一个','查看协查附件') + next('骗我','询问记录为何相连')); break;
+      case 'visitor':
+        record('协查附件 / Danny', [['身份','Harrow House 夜班保安'],['访客记录号','D-2019'],['客服工号','无'],['对话时间','2019-11-03'],['认领申请','未签署、未提交'],['留存内容','一段客服对话缓存']], 'Danny 是协查访客，不是 0002 的签收人。访客的未完成申请与历史签收链分别保存。', next('他问了什么','打开对话缓存')); break;
+      case 'cache':
+        $('#results').innerHTML = `<article class="record"><div class="record-header"><span>缓存副本 / 2019-11-03</span><span>访客 D-2019</span></div><h3>客服对话缓存</h3><div class="chat-line"><span>Danny / 协查访客</span>我认领你之后，我会怎么样？</div><div class="chat-line"><span>客服 0001</span>不会怎样。</div><div class="chat-line"><span>Danny / 协查访客</span>那你告诉我实话。</div><p class="record-note">[会话中断] 认领人姓名栏：空。<br>提交记录：无。没有发生岗位移交。馆方另记其同日夜班失踪，失踪记录不能作为认领凭据。</p>${next('他走了','查询这份申请的后续')}</article>`; break;
+      case 'category':
+        record('分类指南 / E 类', [['分类名称','以上皆不符合'],['启用日期','1974-11-03'],['适用案件','Elias Rook / 5003'],['人员分类变更','不予受理']], '该类别先于找回网存在。旧纸质档案转录后，沿用原分类。', next('Elias Rook','查阅 5003 号档案')); break;
+      case 'rook':
+        record('未拾获物品 / 5003', [['登记名称','Elias Rook'],['年龄 / 职业','34 岁 / 制图员'],['失踪时间','1974-11-03'],['地点','Harrow House，3 号厅西北角，建筑结构内部'],['类别 / 状态','E / 待拾获']], '市政原记录：擅自离岗。另一副本：未结案，建议移交失物招领处。2019 年 Danny 的附注：它一直在布展。它布的是它自己出来的路。', next('上一个','查阅 Danny 的协查附件')); break;
+      case 'recruit':
+        record('招聘广告 / 2019 年存档', [['发布日期','2019-06-01'],['岗位','远程客服'],['工作内容','登记审核、回复查询'],['薪资','市场平均薪资的三倍'],['合同索引','合同']], '本广告已失效，仅保留历史快照。', next('合同','查看历史合同索引')); break;
+      case 'property':
+        record('临时补录 / ' + (state.original || '你的失物'), [['临时编号','B3-TEMP'],['填写地点','B3 层，失物架'],['入库凭据','缺失'],['记录性质','客服人工补录，尚未核验'],['操作要求','先审核，再认领']], '这不是独立的拾获证明。物品名称与搜索词相同，创建来源为客服 0001。', next('审核','核对入库与审核要求')); break;
+      case 'audit':
+        record('审核结果 / B3-TEMP', [['原始拾获记录','未检索到'],['临时登记','人工添加，不能证明物品在库'],['关联申请对象','小鹿 / 客服 0001'],['申请类型','特殊人员认领'],['当前申请状态','尚未提交']], '你遗失的物品没有入库凭据。这份关联申请认领的是客服 0001，不能用于领取你的失物。查看申请不代表同意签署。', next('认领表','仅查看关联认领表') + next('为什么要认领你','询问申请对象为何改变')); break;
       case 'claim': claimForm(); break;
+      case 'terms':
+        record('特殊认领附则', [['认领对象','客服 0001 / 小鹿'],['继受范围','该对象在系统中遗留的全部责任与义务'],['包含事项','岗位职责'],['生效条件','填写认领人姓名并确认提交']], '仅打开本页、查阅说明或刷新页面，不构成签署。', next('岗位职责','查询“岗位职责”的含义')); break;
+      case 'duties':
+        record('岗位职责 / 客服 0001', [['当前岗位','客服 0001'],['移交方式','随特殊认领申请一并移交'],['确认后原在岗人','解除岗位'],['确认后认领人','接替客服岗位，等待下一次认领'],['失物核验','没有找到你的失物']], '尚未提交申请。你可以返回表格签署，也可以明确放弃。刷新和查阅说明不会替你作出选择。', next('认领表','返回尚未提交的表格') + '<button class="text-link" id="leave" type="button">放弃认领，结束本次查询</button>'); break;
       default: errorPage();
     }
   }
   function claimForm() {
-    state.waiting = true;
-    $('#results').innerHTML = `<article class="record warning"><div class="record-header"><span>CLAIM APPLICATION / 0001</span><span>最后一步</span></div><h3>物品认领申请</h3><form id="claim-form" class="claim-form"><label>物品编号<input value="0001" readonly></label><label>物品描述<input value="工牌 / 客服 0001" readonly></label><label>认领人姓名<input name="claimant" autocomplete="off" maxlength="30" required placeholder="请填写你的姓名" value="${escape(state.draft.name)}"></label><label>认领理由<textarea name="reason" required maxlength="300" placeholder="请填写认领理由">${escape(state.draft.reason)}</textarea></label><div class="claim-terms">认领人确认：本人自愿承担被认领物品所遗留之全部责任与义务，包括但不限于该物品在系统中的<button type="button" data-search="岗位职责">岗位职责</button>。</div><p id="claim-error" class="form-error" role="alert" hidden></p><div class="choice"><button class="record-action" type="submit">确认认领 ↗</button><button type="button" id="leave">放弃认领，离开此处</button></div></form></article>`;
+    $('#results').innerHTML = `<article class="record warning"><div class="record-header"><span>特殊认领申请 / 0001</span><span>未提交</span></div><h3>特殊认领申请</h3><p class="record-note">本表认领对象为小鹿（客服 0001），不是你遗失的物品。查看或离开表格不会自动提交。</p><form id="claim-form" class="claim-form"><label>对象编号<input value="客服 0001" readonly></label><label>对象名称<input value="小鹿（关联工牌 0001）" readonly></label><label>认领人姓名<input name="claimant" autocomplete="off" maxlength="30" required placeholder="填写即将签署的姓名" value="${escape(state.draft.name)}"></label><label>认领理由<textarea name="reason" required maxlength="300" placeholder="请填写认领理由">${escape(state.draft.reason)}</textarea></label><div class="claim-terms">认领人确认：本人自愿承担被认领对象所遗留之全部责任与义务，包括但不限于该对象在系统中的<button type="button" data-search="岗位职责">岗位职责</button>。 <button type="button" data-search="免责条款">查阅完整附则</button></div><p id="claim-error" class="form-error" role="alert" hidden></p><div class="choice"><button class="record-action" type="submit">确认签署并认领 &gt;&gt;</button><button type="button" id="leave">放弃认领，结束查询</button></div></form></article>`;
   }
   function emptySearch() {
     $('#results').innerHTML = '<div class="empty"><span class="empty-symbol" aria-hidden="true">⌕</span><h3>没有找到相关失物</h3><p>可以试试物品名称、地点或登记编号。<br>暂时没有记录的物品，也可能正在等待登记。</p><button class="text-link" data-nav="all">返回失物大厅 ↗</button></div>';
@@ -152,36 +188,41 @@
   }
   function normalSearch(query, allowAnomaly) {
     const matches = matchesFor(query);
-    const anomalous = allowAnomaly && !ordinaryOnly.test(query) && !state.seen.includes('岗位职责') && query.length > 0;
-    if (anomalous && !state.original) state.original = query;
+    const propertyQuery = matches.length > 0 || query === state.original || /钱包|钥匙|耳机|证件|卡片|校园卡|手机|背包|手表|雨伞|围巾|戒指|项链|眼镜|书包|水杯/.test(query);
+    const anomalous = allowAnomaly && propertyQuery && !state.seen.includes('岗位职责');
+    if (anomalous) { state.anomalySeen = true; if (!state.original) state.original = query; }
     if (matches.length || anomalous) board(matches, anomalous); else emptySearch();
     return matches.length + (anomalous ? 1 : 0);
   }
-  function nextAccessible() {
-    if (state.level === 0) return state.seen.includes('你是谁') ? ['你在哪', 'B3'] : ['你是谁'];
-    if (state.level === 1) return ['入职记录', '0002', '0003'];
-    if (state.level === 2) return ['上一个', '他问了什么'];
-    return state.seen.includes('岗位职责') ? [] : ['我的东西', '认领表'];
+  function canAccess(term) {
+    const clue = data.clues[term]; if (!clue) return false;
+    if (state.seen.includes(term)) return true;
+    if (clue.anomaly && !state.anomalySeen) return false;
+    if (clue.after?.some(parent => !state.seen.includes(parent))) return false;
+    if (clue.any?.length && !clue.any.some(parent => state.seen.includes(parent))) return false;
+    return true;
   }
   function currentHint() {
-    const seen = word => state.seen.includes(word);
-    // 最后的沉默和已完成的结局不再追加指引，选择留给玩家。
-    if (state.ending || seen('岗位职责')) return null;
-    if (state.level === 0) {
-      if (seen('你在哪')) return 'basement';
-      if (seen('我是小鹿')) return 'location';
-      if (seen('你是谁')) return 'name';
-      return state.original ? 'identity' : 'start';
+    if (state.ending || state.seen.includes('岗位职责')) return null;
+    if (!state.anomalySeen) return 'start';
+    const steps = [
+      ['你是谁','identity'], ['我是小鹿','name'], ['你在哪','location'], ['B3','basement'],
+      ['入职记录','employee'], ['0002','previous'], ['0003','chain'], ['上一个','visitor'],
+      ['他问了什么','cache'], ['他走了','departure'], ['我的东西','property'], ['审核','audit'],
+      ['认领表','claim'], ['免责条款','terms'], ['岗位职责','duties']
+    ];
+    const furthest = steps.reduce((last, [term], i) => state.seen.includes(term) ? Math.max(last, i) : last, -1);
+    return steps.slice(furthest + 1).find(([term]) => !state.seen.includes(term) && canAccess(term))?.[1] || null;
+  }
+  function nextAccessible() {
+    if (state.ending || state.seen.includes('岗位职责')) return [];
+    const questions = (data.clues[state.lastClue]?.queries || []).filter(q => canAccess(normalize(q)));
+    const hint = currentHint();
+    if (hint && hint !== 'start') {
+      const term = data.hints[hint].keyword;
+      if (canAccess(normalize(term)) && !questions.includes(term)) questions.push(term);
     }
-    if (state.level === 1) {
-      if (!seen('入职记录')) return 'employee';
-      return seen('0002') ? 'chain' : 'previous';
-    }
-    if (state.level === 2) return seen('上一个') ? 'cache' : 'visitor';
-    if (!seen('我的东西')) return 'property';
-    if (!seen('审核')) return 'audit';
-    if (!seen('认领表')) return 'claim';
-    return seen('免责条款') ? 'duties' : 'terms';
+    return questions;
   }
   function renderGuide() {
     const id = currentHint();
@@ -205,9 +246,9 @@
     const expanded = openGuide === id && level > 0;
     $('#hint-content').hidden = !expanded;
     $('#hint-toggle').setAttribute('aria-expanded', String(expanded));
-    $('#hint-toggle').innerHTML = expanded ? '合上手记 <span aria-hidden="true">−</span>' : '翻阅提示 <span aria-hidden="true">＋</span>';
+    $('#hint-toggle').innerHTML = expanded ? '收起提示 <span aria-hidden="true">−</span>' : '查看提示 <span aria-hidden="true">＋</span>';
     $('#hint-body').textContent = level ? data.hints[id].notes[level - 1] : '';
-    $('#hint-tier').textContent = ['','第一札 · 观察','第二札 · 思路','第三札 · 索引'][level] || '';
+    $('#hint-tier').textContent = ['','第 1 级 · 观察','第 2 级 · 思路','第 3 级 · 关键词'][level] || '';
     $('#hint-count').textContent = `0${level} / 03`;
     $('#hint-next').hidden = level === 3;
     $('#hint-search').hidden = level !== 3;
@@ -221,7 +262,7 @@
   function renderTrail() {
     $('#history-list').innerHTML = state.history.slice().reverse().map(q => `<button type="button" data-search="${escape(q)}" ${q === activeQuery ? 'aria-current="true"' : ''}>${escape(q)}<span>↗</span></button>`).join('');
     $('#history-panel').hidden = !state.history.length;
-    $('#return-claim').hidden = !(state.waiting && !state.ending);
+    $('#return-claim').hidden = !(state.seen.includes('认领表') && !state.ending);
     $('#search-objective').hidden = !state.original || !!state.ending;
     $('#objective-name').textContent = state.original;
     renderGuide();
@@ -252,17 +293,20 @@
         else count = normalSearch(query, false);
       } else if (!clue) {
         // 普通寒暄、系统词与“救我”不触发异常，也不会污染最初失物名称。
-        if (ordinaryOnly.test(normalize(query))) { errorPage(); } else count = normalSearch(query, true);
-      } else if (clue.level > state.level) {
+        if (ordinaryOnly.test(normalize(query))) { errorPage(); } else {
+          count = normalSearch(query, true);
+          if (!count && state.anomalySeen) { errorPage(); words = nextAccessible(); }
+        }
+      } else if (!canAccess(term)) {
         errorPage(true); if (!silent) words = nextAccessible();
       } else {
         const repeated = state.seen.includes(term);
         if (!repeated) state.seen.push(term);
-        if (term === 'B3') state.level = Math.max(state.level,1);
-        if (term === '0003' || term === '你懂了吗') state.level = Math.max(state.level,2);
-        if (term === '他问了什么' || term === '我的东西' || term === '审核') state.level = Math.max(state.level,3);
+        state.level = Math.max(state.level, clue.level || 0);
+        state.lastClue = term;
+        if (term === '岗位职责') state.waiting = true;
         renderPage(clue.page);
-        if (!repeated && !silent) words = clue.words;
+        if (!silent) words = [...(!repeated ? clue.words : []), ...(clue.queries || []).filter(q => canAccess(normalize(q)))];
         document.body.classList.toggle('archive-mode', !!clue.page);
         document.body.classList.toggle('silence-mode', state.seen.includes('岗位职责'));
       }
@@ -300,6 +344,7 @@
   function hasStarted() { return !!(state.original || state.seen.length || state.history.length || state.ending); }
   function openIntro(replay = false) {
     if ($('#intro').open) return;
+    if (typeof $('#intro').showModal !== 'function') return; // 独立说明页仍可使用。
     introTrigger = document.activeElement;
     $('#intro').dataset.replay = String(replay);
     $('#intro-form').hidden = replay;
@@ -327,7 +372,7 @@
   function showItem(id) {
     if (id === '0001') {
       if (state.ending === 'claimed') modal('找回网 · 员工记录', `<h2>${escape(state.name)}</h2><p>工号：0001<br>岗位：远程客服<br>状态：待认领<br>工作地点：B3 层，员工通道尽头。</p>`);
-      else search('你是谁');
+      else modal('异常登记 / 原始备注', '<h2>未分类登记 / 0001</h2><dl class="detail-list"><dt>物品名称</dt><dd>未填写</dd><dt>原始备注</dt><dd>帮帮我。</dd><dt>登记来源</dt><dd>人工补录</dd></dl><p>这条备注没有描述物品。你可以在搜索框中询问登记人，也可以返回正常登记继续查找。</p><button class="record-action" data-search="你是谁">询问：你是谁？ &gt;&gt;</button>');
       return;
     }
     const item = allItems().find(item => item.id === id); if (!item) return;
@@ -413,7 +458,7 @@
       if (event.key === 'ArrowUp' && i === 0) $('#search').focus();
       else buttons[(i + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
     }
-    if (event.key === 'Escape') { suggestionId++; showSuggestions(false); $('#search').focus(); }
+    if (event.key === 'Escape') { $('#search').focus(); suggestionId++; showSuggestions(false); }
   });
   document.addEventListener('click', event => {
     if (!event.target.closest('.search-section')) { suggestionId++; showSuggestions(false); }
@@ -433,7 +478,12 @@
     }
   });
   $('#modal').addEventListener('close', () => { if (modalTrigger?.isConnected) modalTrigger.focus({ preventScroll: true }); });
-  $('#read-intro').addEventListener('click', () => openIntro(true));
+  document.addEventListener('click', event => {
+    const link = event.target.closest('a[href]');
+    if (!link || !/^guide\.html(?:[?#]|$)/.test(link.getAttribute('href')) || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    // 所有站内说明入口都不阻止默认导航，也不计作最终放弃。
+    try { sessionStorage.setItem('zhaohui-guide-return','1'); } catch { /* 页面仍可访问。 */ }
+  });
   $('#close-intro').addEventListener('click', closeIntro);
   $('#intro-skip').addEventListener('click', closeIntro);
   $('#intro-return').addEventListener('click', closeIntro);
@@ -444,7 +494,7 @@
     if (!$('#intro').open || $('#intro').dataset.replay === 'true') return;
     const property = $('#intro-item').value.trim().slice(0,40);
     if (!property) { $('#intro-error').hidden = false; $('#intro-item').setAttribute('aria-invalid','true'); $('#intro-item').focus(); return; }
-    closeIntro(); search(property); $('#search').focus({ preventScroll: true });
+    state.original = property; closeIntro(); search(property); $('#search').focus({ preventScroll: true });
   });
   $('#show-all').addEventListener('click', () => home(true));
   $('#hint-toggle').addEventListener('click', () => {
@@ -503,7 +553,7 @@
   });
   window.addEventListener('pagehide', () => { cancelPending(); save(); });
   window.addEventListener('pageshow', event => {
-    if (event.persisted) { resolveDeparture(); if ($('#ending').open) $('#ending').close(); home(); }
+    if (event.persisted) { resolveDeparture(true); if ($('#ending').open) $('#ending').close(); home(); }
   });
   window.addEventListener('storage', event => {
     if (event.key !== key && event.key !== null) return;

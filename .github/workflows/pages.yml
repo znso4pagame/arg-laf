@@ -31,13 +31,7 @@ jobs:
       - name: Test interactions
         run: npm test
       - name: Prepare static files
-        run: |
-          mkdir -p _site/html _site/css _site/js
-          cp index.html _site/index.html
-          cp html/index.html _site/html/index.html
-          cp css/*.css _site/css/
-          cp js/app.js js/data.js _site/js/
-          touch _site/.nojekyll
+        run: npm run build
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static site

@@ -4,6 +4,7 @@
   "private": true,
   "description": "找回网静态 ARG；浏览器运行无需依赖，开发依赖仅用于交互回归测试。",
   "scripts": {
+    "build": "node js/build-pages.cjs",
     "test": "node --test js/tests/*.test.cjs"
   },
   "devDependencies": {
