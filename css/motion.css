@@ -164,3 +164,21 @@
     translate: 0 0;
   }
 }
+
+/* 扫描区域可用键盘缩放，箭头与滚动仍交给原生溢出区域。 */
+.image-viewport:focus-visible {
+  outline: 2px solid #718f68;
+  outline-offset: -3px;
+}
+.image-tools [data-zoom-fit] {
+  flex-basis: auto;
+  white-space: nowrap;
+}
+.image-tools button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.image-tools button:disabled:hover {
+  background: #f7f8ef;
+  border-color: #bbc9ad;
+}

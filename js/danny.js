@@ -176,8 +176,45 @@
         else a.removeAttribute("aria-current");
       });
     }
+    function zoomImage(viewer, requested) {
+      const scale = Math.max(1, Math.min(3, requested));
+      const previous = Number(viewer.dataset.scale) || 1;
+      if (scale === previous) return;
+      const viewport = viewer.querySelector(".image-viewport");
+      const img = viewer.querySelector("img");
+      motion.cancel(viewport);
+      const before = img.getBoundingClientRect();
+      const box = viewport.getBoundingClientRect();
+      const centerX = box.left + viewport.clientWidth / 2;
+      const centerY = box.top + viewport.clientHeight / 2;
+      const fraction = (value, start, size) =>
+        size ? Math.max(0, Math.min(1, (value - start) / size)) : 0.5;
+      const x = fraction(centerX, before.left, before.width);
+      const y = fraction(centerY, before.top, before.height);
+      motion.cancel(img);
+      viewer.dataset.scale = scale;
+      img.style.width = scale * 100 + "%";
+      img.style.maxWidth = "none";
+      const after = img.getBoundingClientRect();
+      viewport.scrollLeft = Math.max(0, Math.min(
+        viewport.scrollWidth - viewport.clientWidth,
+        viewport.scrollLeft + after.left + x * after.width - centerX,
+      ));
+      viewport.scrollTop = Math.max(0, Math.min(
+        viewport.scrollHeight - viewport.clientHeight,
+        viewport.scrollTop + after.top + y * after.height - centerY,
+      ));
+      viewer.querySelector(".zoom-level").textContent = scale * 100 + "%";
+      viewer.querySelector('[data-zoom="-1"]').disabled = scale === 1;
+      viewer.querySelector('[data-zoom="1"]').disabled = scale === 3;
+      viewer.querySelector('[data-zoom-fit]').disabled = scale === 1;
+      motion.zoom(img,
+        before.width && after.width ? before.width / after.width : previous / scale, x, y);
+      if (d.activeElement?.disabled && viewer.contains(d.activeElement))
+        viewport.focus({ preventScroll: true });
+    }
     const body = (f) =>
-      `${f.fields?.length ? `<dl class="record-fields">${f.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${f.image ? `<div class="image-viewer"><div class="image-tools"><span>扫描附件</span><button type="button" data-zoom="-1" aria-label="缩小图片">－</button><span class="zoom-level">100%</span><button type="button" data-zoom="1" aria-label="放大图片">＋</button><a href="${esc(f.image)}" target="_blank" rel="noopener">原图 ↗</a></div><div class="image-viewport"><a class="image-link" href="${esc(f.image)}" target="_blank" rel="noopener"><img src="${esc(f.image)}" alt="${esc(f.title)}"></a></div></div>` : ""}<div class="entry-prose">${(f.body || []).map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
+      `${f.fields?.length ? `<dl class="record-fields">${f.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${f.image ? `<div class="image-viewer"><div class="image-tools"><span>扫描附件</span><button type="button" data-zoom="-1" aria-label="缩小图片" disabled>－</button><span class="zoom-level" aria-live="polite">100%</span><button type="button" data-zoom="1" aria-label="放大图片">＋</button><button type="button" data-zoom-fit disabled>适合</button><a href="${esc(f.image)}" target="_blank" rel="noopener">原图 ↗</a></div><div class="image-viewport" tabindex="0" role="region" aria-label="扫描图片，可用加减号缩放，0 恢复适合大小"><a class="image-link" href="${esc(f.image)}" target="_blank" rel="noopener"><img src="${esc(f.image)}" alt="${esc(f.title)}"></a></div></div>` : ""}<div class="entry-prose">${(f.body || []).map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
     function listing(entries) {
       return entries.length
         ? `<div class="entry-list">${entries.map((f) => `<article class="${has(f.id) ? "is-read" : ""}"><span class="entry-date">${esc(f.date || "旧存档")} · ${esc(f.author || "Danny")} · ${esc(f.kind === "image" ? "相片" : "文字")}<span class="read-marker" ${has(f.id) ? "" : "hidden"}>已读</span></span><h3><button data-read="${esc(f.key)}">${esc(f.title)}</button></h3><p>${esc(f.summary)}</p></article>`).join("")}</div>`
@@ -506,20 +543,10 @@
         go(b.dataset.tab);
       }
       if (b.dataset.read) read(b.dataset.read);
-      if (b.dataset.zoom) {
-        const viewer = b.closest(".image-viewer"),
-          img = viewer.querySelector("img");
-        const scale = Math.max(
-          1,
-          Math.min(
-            3,
-            (Number(viewer.dataset.scale) || 1) + Number(b.dataset.zoom) * 0.5,
-          ),
-        );
-        viewer.dataset.scale = scale;
-        img.style.width = scale * 100 + "%";
-        img.style.maxWidth = "none";
-        viewer.querySelector(".zoom-level").textContent = scale * 100 + "%";
+      if (b.dataset.zoom || b.hasAttribute("data-zoom-fit")) {
+        const viewer = b.closest(".image-viewer");
+        zoomImage(viewer, b.hasAttribute("data-zoom-fit") ? 1 :
+          (Number(viewer.dataset.scale) || 1) + Number(b.dataset.zoom) * 0.5);
       }
       if (b.dataset.move && staff())
         moveEvent(b.dataset.move, null, Number(b.dataset.direction));
@@ -537,12 +564,14 @@
         status("值勤流水校订完成，查询会话已恢复。");
       }
       if (b.id === "close-reading") {
+        motion.cancelTree($("#reading-pane"));
         $("#reading-pane").hidden = true;
         $("#site-main").classList.remove("split-reading");
         w.history.replaceState(null, "", "#" + active);
         const origin =
-          d.querySelector('.entry-list [data-read="' + lastReadKey + '"]') ||
+          d.querySelector('.entry-list [data-read="' + (lastReadKey === "door-back" ? "door-front" : lastReadKey) + '"]') ||
           $("#site-main");
+        motion.feedback(origin);
         origin.focus({ preventScroll: true });
         origin.scrollIntoView?.({ block: "nearest" });
       }
@@ -559,6 +588,15 @@
         w.history.replaceState(null, "", "#journal");
         status("已退出员工模式。");
       }
+    });
+    d.addEventListener("keydown", (e) => {
+      const viewport = e.target.closest(".image-viewport");
+      if (!viewport || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!["+", "=", "-", "0"].includes(e.key)) return;
+      e.preventDefault();
+      const viewer = viewport.closest(".image-viewer");
+      zoomImage(viewer, e.key === "0" ? 1 :
+        (Number(viewer.dataset.scale) || 1) + (e.key === "-" ? -0.5 : 0.5));
     });
     let dragged = null;
     d.addEventListener("dragstart", (e) => {

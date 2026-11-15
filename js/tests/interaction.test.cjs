@@ -1724,3 +1724,95 @@ test("已经结束的动画会正常清理，后续取消不会再次操作它",
   assert.equal(effect.cancelled, false);
   assert.equal(effect.complete, true);
 });
+
+test("扫描缩放可连续中断，键盘恢复与边界控件立即生效", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#photos", null, { animate: true });
+  a.click("[data-read=door-front]");
+  assert.equal(a.$('[data-zoom="-1"]').disabled, true);
+  const viewport = a.$(".image-viewport"), img = viewport.querySelector("img");
+  const key = (value, options = {}) => viewport.dispatchEvent(new a.w.KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true, ...options }));
+  viewport.focus();
+  key("+");
+  const first = a.effects.findLast((x) => x.element === img);
+  assert.equal(img.style.width, "150%");
+  assert.match(first.frames[0].transform, /scale/);
+  key("+");
+  assert.equal(first.cancelled, true);
+  assert.equal(img.style.width, "200%");
+  key("+", { ctrlKey: true });
+  assert.equal(img.style.width, "200%");
+  key("+"); key("+"); key("+");
+  assert.equal(img.style.width, "300%");
+  assert.equal(a.$('[data-zoom="1"]').disabled, true);
+  key("0");
+  assert.equal(img.style.width, "100%");
+  assert.equal(a.$('[data-zoom-fit]').disabled, true);
+  key("-");
+  assert.equal(img.style.width, "100%");
+  a.click('[data-zoom="1"]');
+  a.$('[data-zoom-fit]').focus();
+  a.click('[data-zoom-fit]');
+  assert.equal(a.d.activeElement, viewport);
+});
+test("缩放以当前阅读中心保持位置，减少动态时也立即更新尺寸", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#photos", null, { animate: true, systemReduced: true });
+  a.click("[data-read=door-front]");
+  const viewport = a.$(".image-viewport"), img = viewport.querySelector("img");
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 200 }, clientHeight: { value: 200 },
+    scrollWidth: { get: () => 200 * (Number(a.$('.image-viewer').dataset.scale) || 1) },
+    scrollHeight: { get: () => 200 * (Number(a.$('.image-viewer').dataset.scale) || 1) },
+  });
+  viewport.getBoundingClientRect = () => new a.w.DOMRect(0, 0, 200, 200);
+  img.getBoundingClientRect = () => {
+    const size = 200 * (Number(a.$('.image-viewer').dataset.scale) || 1);
+    return new a.w.DOMRect(-viewport.scrollLeft, -viewport.scrollTop, size, size);
+  };
+  a.click('[data-zoom="1"]');
+  assert.equal(viewport.scrollLeft, 50);
+  assert.equal(viewport.scrollTop, 50);
+  a.click('[data-zoom-fit]');
+  assert.equal(viewport.scrollLeft, 0);
+  assert.equal(viewport.scrollTop, 0);
+  assert.equal(a.effects.length, 0);
+});
+test("收起照片背面取消阅读动画并回到正面目录，关闭弹窗同样清理", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#photos", null, { animate: true });
+  a.click('[data-read=door-front]');
+  a.click('[data-read=door-back]');
+  a.click('[data-zoom="1"]');
+  const effects = a.effects.filter((x) => a.$('#reading-pane').contains(x.element));
+  a.click('#close-reading');
+  assert.equal(a.$('#reading-pane').hidden, true);
+  assert.ok(effects.every((x) => x.cancelled));
+  assert.equal(a.d.activeElement.dataset.read, 'door-front');
+  assert.equal(a.w.location.hash, '#photos');
+  const b = boot(t, 'index', memory(), memory(), '', null, { animate: true });
+  b.click('#intro-skip');
+  b.click('#reset');
+  const paper = b.effects.findLast((x) => x.element.id === 'modal-body');
+  b.click('#cancel-choice');
+  assert.equal(paper.cancelled, true);
+  assert.equal(b.$('#modal').open, false);
+});
+test("收藏筛选、重点和搜索重绘后仍保留键盘操作位置", (t) => {
+  const local = memory();
+  makeStore(local).collect(data.files.badge);
+  const a = boot(t, 'index', local, memory(), '', null, { animate: true });
+  a.click('#intro-skip');
+  a.click('[data-nav=mine]');
+  a.click('[data-filter=image]');
+  assert.equal(a.d.activeElement.dataset.filter, 'image');
+  a.click('[data-filter=all]');
+  a.click('[data-star=badge]');
+  assert.equal(a.d.activeElement.dataset.star, 'badge');
+  a.click('[data-filter=starred]');
+  a.click('[data-star=badge]');
+  assert.equal(a.$('[data-star=badge]'), null);
+  assert.equal(a.d.activeElement.dataset.filter, 'starred');
+  a.set('#notebook-search', '工牌');
+  a.submit('#notebook-search-form');
+  assert.equal(a.d.activeElement.id, 'notebook-search');
+  a.click('#clear-notebook-search');
+  assert.equal(a.d.activeElement.id, 'notebook-search');
+});

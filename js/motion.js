@@ -97,6 +97,13 @@
       { duration: 230 },
     );
   }
+  function zoom(image, ratio, x, y) {
+    const origin = `${x * 100}% ${y * 100}%`;
+    play(image, [
+      { transform: `scale(${ratio})`, transformOrigin: origin },
+      { transform: "scale(1)", transformOrigin: origin },
+    ]);
+  }
   function feedback(root, kind = "success") {
     if (kind === "error")
       play(
@@ -155,6 +162,8 @@
   w.addEventListener("pageshow", sync);
   sync();
   return Object.freeze({
+    cancel,
+    zoom,
     reduced,
     sync,
     enter,

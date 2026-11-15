@@ -491,7 +491,8 @@
     }
     if (b.id === "clear-notebook-search") {
       mineQuery = "";
-      renderMine();
+      renderMine({ animate: true });
+      $("#notebook-search").focus({ preventScroll: true });
     }
     if (b.dataset.editNote) {
       const n = store.read().notes.find((n) => n.id === b.dataset.editNote);
@@ -621,11 +622,17 @@
     if (b.dataset.file) openFile(b.dataset.file);
     if (b.dataset.filter) {
       mineFilter = b.dataset.filter;
-      renderMine();
+      renderMine({ animate: true });
+      document.querySelector(`[data-filter="${mineFilter}"]`).focus({ preventScroll: true });
     }
     if (b.dataset.star) {
-      store.star(b.dataset.star);
+      const id = b.dataset.star;
+      store.star(id);
       renderMine();
+      const target = [...document.querySelectorAll("[data-star]")].find((n) => n.dataset.star === id)
+        || document.querySelector(`[data-filter="${mineFilter}"]`);
+      target.focus({ preventScroll: true });
+      motion.feedback(target);
     }
     if (b.id === "compare-files") compare();
     if (b.id === "new-note")
@@ -751,7 +758,8 @@
     if (form.id === "notebook-search-form") {
       e.preventDefault();
       mineQuery = $("#notebook-search").value.trim();
-      renderMine();
+      renderMine({ animate: true });
+      $("#notebook-search").focus({ preventScroll: true });
     }
     if (form.id === "edit-note-form") {
       e.preventDefault();
@@ -916,6 +924,7 @@
     if (e.key === store.key) refreshSharedState();
   });
   $("#modal").addEventListener("close", () => {
+    motion.cancelTree($("#modal-body"));
     pendingChoice = null;
   });
   const startupState = history.state;
