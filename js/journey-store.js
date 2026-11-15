@@ -232,9 +232,10 @@
         });
     });
   }
-  function finish(ending, name = "") {
+  function finish(ending, name = "", expectedRun) {
     return update((state) => {
-      if (state.ending) return;
+      if (state.ending || (expectedRun && state.runToken !== expectedRun))
+        return;
       if (
         ending === "claimed" &&
         name.trim() &&

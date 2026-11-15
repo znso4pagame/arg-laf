@@ -1386,3 +1386,152 @@ test("旧标签页的员工会话不会因新一轮在别处登录而重新生�
   assert.equal(stale.$("[data-read=night]"), null);
   assert.match(stale.$("#permission-label").textContent, /游客/);
 });
+
+test("另一窗口已经放弃时，旧签署确认不会显示虚假的岗位移交", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.clause);
+  store.update((s) => (s.introduced = true));
+  const a = boot(t, "index", local),
+    b = boot(t, "index", local);
+  a.set("#claim-form [name=name]", "窗口甲");
+  a.submit("#claim-form");
+  b.click("#leave");
+  b.click("#confirm-choice");
+  a.click("#confirm-choice");
+  assert.equal(a.state().ending, "left");
+  assert.equal(a.$("#ending").open, false);
+  assert.match(a.$("#staff-count").textContent, /0/);
+  assert.equal(a.$("#application-panel").hidden, true);
+});
+test("两份签署确认按已经保存的姓名展示，迟到的确认不改写结局", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.clause);
+  store.update((s) => (s.introduced = true));
+  const a = boot(t, "index", local),
+    b = boot(t, "index", local);
+  a.set("#claim-form [name=name]", "窗口甲");
+  a.submit("#claim-form");
+  b.set("#claim-form [name=name]", "窗口乙");
+  b.submit("#claim-form");
+  b.click("#confirm-choice");
+  a.click("#confirm-choice");
+  assert.equal(a.state().name, "窗口乙");
+  assert.match(a.$("#ending-name").textContent, /窗口乙/);
+  assert.doesNotMatch(a.$("#ending-name").textContent, /窗口甲/);
+  assert.match(a.$("#toast").textContent, /已有结局/);
+});
+test("结束事件关闭其他窗口的旧确认，缓存恢复同一轮也同步实际终局", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.clause);
+  store.update((s) => (s.introduced = true));
+  const a = boot(t, "index", local),
+    b = boot(t, "index", local);
+  a.click("#leave");
+  b.set("#claim-form [name=name]", "旧确认");
+  b.submit("#claim-form");
+  store.finish("left");
+  a.w.dispatchEvent(new a.w.StorageEvent("storage", { key: store.key }));
+  assert.equal(a.$("#modal").open, false);
+  assert.equal(a.$("#application-panel").hidden, true);
+  cachedPage(b);
+  assert.equal(b.$("#modal").open, false);
+  assert.equal(b.$("#application-panel").hidden, true);
+  assert.match(b.$("#staff-count").textContent, /0/);
+  assert.equal(b.state().ending, "left");
+});
+test("注销后完成开场会解开其他游客窗口的重开提示，无须再次刷新或换栏目", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.reset();
+  const site = boot(t, "danny", local, memory(), "#journal");
+  assert.match(site.$("#site-main").textContent, /尚未开始/);
+  const main = boot(t, "index", local, memory(), "#home");
+  main.submit("#intro-form");
+  site.w.dispatchEvent(new site.w.StorageEvent("storage", { key: store.key }));
+  assert.ok(site.$("[data-read=rain]"));
+  assert.ok(site.state().clues.some((x) => x.id === "trace"));
+  assert.match(site.$("#journey-guide").textContent, /确认 Danny 的访问身份/);
+});
+test("空格登记不会生成空白物品，错误字段保留在表单中并可继续修正", (t) => {
+  const a = boot(t);
+  a.click("#intro-skip");
+  a.click("[data-nav=register]");
+  a.set("#register-form [name=name]", "  ");
+  a.set("#register-form [name=place]", "\u3000");
+  a.set("#register-form [name=description]", "正常描述");
+  a.submit("#register-form");
+  assert.equal(a.state().registrations.length, 0);
+  assert.ok(a.$("#modal").open);
+  assert.equal(a.$("#register-error").hidden, false);
+  assert.equal(a.d.activeElement, a.$("#register-form [name=name]"));
+  a.set("#register-form [name=name]", "  手电  ");
+  a.set("#register-form [name=place]", "门房");
+  assert.equal(a.$("#register-error").hidden, true);
+  a.submit("#register-form");
+  assert.equal(a.state().registrations.length, 1);
+  assert.equal(a.state().registrations[0].name, "手电");
+  assert.equal(a.$("#modal").open, false);
+});
+test("另一窗口关闭线索辅助后，当前开关与提示立即同步且不提交搜索", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.set("#search", "钱包");
+  a.click("#match-toggle");
+  assert.equal(a.$("#clue-match").hidden, false);
+  makeStore(local).update((s) => (s.settings.assist = false));
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#match-toggle").getAttribute("aria-pressed"), "false");
+  assert.equal(a.$("#clue-match").hidden, true);
+  assert.equal(a.state().lastQuery, "");
+});
+test("旧轮次的确认不能结束新一轮，即使新一轮已经重新取得员工身份", () => {
+  const store = makeStore(memory());
+  store.mark("staff");
+  const previous = store.read().runToken;
+  store.reset();
+  store.mark("staff");
+  store.finish("claimed", "旧确认", previous);
+  assert.equal(store.read().ending, "");
+  store.finish("left", "", store.read().runToken);
+  assert.equal(store.read().ending, "left");
+});
+test("注销后可完整重玩：开场、登录、两条调查线、核验与另一个结局", (t) => {
+  const local = memory(),
+    session = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.finish("claimed", "上一轮");
+  store.addNote("上一轮笔记", "不应留下");
+  const main = boot(t, "index", local, session);
+  main.click("[data-reset-game]");
+  main.click("#confirm-reset");
+  const token = main.state().runToken;
+  assert.equal(main.state().clues.length, 0);
+  assert.equal(main.state().notes.length, 0);
+  main.submit("#intro-form");
+  const site = cabinet(t, local, session);
+  assert.equal(session.getItem("harrow-run-token"), token);
+  compare(site);
+  for (const key of ["signed", "relist", "clause"])
+    site.click("[data-read=" + key + "]");
+  repair(site);
+  chain(site);
+  assert.ok(site.state().flags.includes("verified"));
+  const final = boot(t, "index", local, session, "#application");
+  assert.equal(final.$("#application-panel").hidden, false);
+  final.click("#leave");
+  final.click("#confirm-choice");
+  assert.equal(final.state().ending, "left");
+  assert.equal(final.state().runToken, token);
+  assert.equal(final.state().notes.length, 0);
+  assert.match(final.$("#staff-count").textContent, /0/);
+});

@@ -437,7 +437,7 @@
     );
   }
   function review(ending, name = "") {
-    pendingChoice = { ending, name };
+    pendingChoice = { ending, name, runToken: store.read().runToken };
     modal(
       "最后确认",
       `<h2>${ending === "claimed" ? "确认签署这份人员认领？" : "确认放弃本次认领？"}</h2><p>${ending === "claimed" ? `认领人：${esc(name)}。对象为小鹿 / 客服 0001，按完整附则继受责任与岗位。` : "确认后本次特殊申请结束。关闭这个窗口则保留待决定状态。"}</p><button class="record-action" id="confirm-choice">确认${ending === "claimed" ? "签署" : "放弃"}</button><button class="text-link" id="cancel-choice">返回继续查阅</button>`,
@@ -541,7 +541,7 @@
       else if (b.dataset.nav === "register")
         modal(
           "拾物登记",
-          '<h2>登记拾获物品</h2><form id="register-form" class="register-form"><label>物品名称<input name="name" required maxlength="60"></label><label>拾获地点<input name="place" required maxlength="80"></label><label>描述<textarea name="description" required maxlength="300"></textarea></label><p>本机演示登记，不会发送到服务器。</p><button class="record-action">保存本机登记</button></form>',
+          '<h2>登记拾获物品</h2><form id="register-form" class="register-form"><label>物品名称<input name="name" required maxlength="60"></label><label>拾获地点<input name="place" required maxlength="80"></label><label>描述<textarea name="description" required maxlength="300"></textarea></label><p>本机演示登记，不会发送到服务器。</p><p id="register-error" class="form-error" role="alert" hidden></p><button class="record-action">保存本机登记</button></form>',
         );
     }
     if (b.hasAttribute("data-anomaly")) {
@@ -627,13 +627,23 @@
     if (b.id === "confirm-choice" && pendingChoice) {
       const choice = pendingChoice;
       pendingChoice = null;
-      store.finish(choice.ending, choice.name);
+      const result = store.finish(choice.ending, choice.name, choice.runToken);
       $("#modal").close();
+      if (result.runToken !== choice.runToken) {
+        restoreNavigation();
+        refreshSharedState();
+        return;
+      }
       home();
-      if (choice.ending === "claimed") {
+      if (
+        result.ending !== choice.ending ||
+        (result.ending === "claimed" && result.name !== choice.name)
+      )
+        toast("本轮已有结局，已恢复当前保存的记录。");
+      if (result.ending === "claimed") {
         $("#ending-reveal").hidden = false;
         $("#ending-status").textContent = "认领完成 / 岗位移交";
-        $("#ending-name").textContent = `客服 0001 / ${choice.name}`;
+        $("#ending-name").textContent = `客服 0001 / ${result.name}`;
         $("#ending").showModal();
       }
     }
@@ -701,6 +711,12 @@
     $("#compare-files").disabled = selected.length !== 2;
   });
   document.addEventListener("input", (e) => {
+    const registration = e.target.closest("#register-form");
+    if (registration && e.target.value.trim()) {
+      e.target.removeAttribute("aria-invalid");
+      if (!registration.querySelector("[aria-invalid=true]"))
+        $("#register-error").hidden = true;
+    }
     if (e.target.id === "clue-note") {
       store.annotate(e.target.dataset.id, e.target.value);
       $("#note-save-status").textContent = "备注已保存在本机。";
@@ -756,13 +772,30 @@
     }
     if (form.id === "register-form") {
       e.preventDefault();
-      const f = new FormData(form);
-      store.update((s) =>
-        s.registrations.push({
-          id: "local-" + Date.now(),
+      const f = new FormData(form),
+        values = {
           name: String(f.get("name")).trim(),
           place: String(f.get("place")).trim(),
           description: String(f.get("description")).trim(),
+        };
+      let invalid = false;
+      for (const [name, value] of Object.entries(values)) {
+        if (!value) {
+          invalid = true;
+          form.elements[name].setAttribute("aria-invalid", "true");
+        } else form.elements[name].removeAttribute("aria-invalid");
+      }
+      if (invalid) {
+        $("#register-error").textContent =
+          "请补全物品名称、拾获地点和描述，不能只填写空格。";
+        $("#register-error").hidden = false;
+        form.querySelector("[aria-invalid=true]").focus();
+        return;
+      }
+      store.update((s) =>
+        s.registrations.push({
+          id: "local-" + Date.now(),
+          ...values,
           type: "其他",
           date: "本机登记",
         }),
@@ -822,8 +855,7 @@
     e.preventDefault();
     $("#ending").close();
   });
-  window.addEventListener("storage", (e) => {
-    if (e.key !== store.key) return;
+  function refreshSharedState() {
     if (
       history.state?.zhaohui === 1 &&
       (history.state.runToken || "initial") !== store.read().runToken
@@ -831,6 +863,13 @@
       restoreNavigation();
       return;
     }
+    if (store.read().ending && pendingChoice) {
+      $("#modal").close();
+      pendingChoice = null;
+      toast("本轮已在其他窗口结束，已更新为当前记录。");
+    }
+    syncAssist();
+    if (store.read().ending || !store.read().settings.assist) clearMatch();
     if (document.body.classList.contains("notebook-mode")) {
       const input = $("#notebook-search"),
         editing = document.activeElement === input,
@@ -848,6 +887,9 @@
       renderResults(displayedQuery);
       updateChrome();
     }
+  }
+  window.addEventListener("storage", (e) => {
+    if (e.key === store.key) refreshSharedState();
   });
   $("#modal").addEventListener("close", () => {
     pendingChoice = null;
@@ -933,7 +975,10 @@
     navigateToHash(location.hash);
   }
   window.addEventListener("pageshow", (e) => {
-    if (e.persisted) restoreNavigation();
+    if (e.persisted) {
+      restoreNavigation();
+      refreshSharedState();
+    }
   });
   window.addEventListener("popstate", restoreNavigation);
   window.addEventListener("hashchange", restoreNavigation);

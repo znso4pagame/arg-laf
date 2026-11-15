@@ -121,7 +121,7 @@
     function progressSignature() {
       return staff()
         ? ["cabinet", "compared", "timeline", "verified"].map(flag).join("|")
-        : "guest";
+        : "guest:" + String(store.read().introduced);
     }
     function refreshReadMarkers() {
       d.querySelectorAll(".entry-list [data-read]").forEach((b) => {
