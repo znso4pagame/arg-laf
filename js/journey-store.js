@@ -17,6 +17,7 @@
     typeof value === "string" ? value.slice(0, max) : "";
   const empty = () => ({
     version: 2,
+    runToken: "initial",
     revision: 0,
     introduced: false,
     goal: "",
@@ -72,6 +73,9 @@
   function normalize(raw) {
     const state = empty();
     if (!raw || raw.version !== 2) return state;
+    state.runToken = /^run-[a-z0-9-]+$/.test(raw.runToken || "")
+      ? raw.runToken
+      : "initial";
     state.revision = Math.max(0, Number(raw.revision) || 0);
     state.introduced = raw.introduced === true;
     state.goal = text(raw.goal, 60);
@@ -245,6 +249,11 @@
   }
   function reset() {
     memory = empty();
+    memory.runToken =
+      "run-" +
+      Date.now().toString(36) +
+      "-" +
+      Math.random().toString(36).slice(2, 10);
     try {
       if (usingStorage) storage.setItem(key, JSON.stringify(memory));
     } catch {

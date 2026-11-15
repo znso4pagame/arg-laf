@@ -57,6 +57,8 @@
       try {
         return (
           w.sessionStorage.getItem("harrow-session") === "danny-private-v3" &&
+          (w.sessionStorage.getItem("harrow-run-token") || "initial") ===
+            store.read().runToken &&
           flag("staff")
         );
       } catch {
@@ -69,7 +71,9 @@
       composing = false,
       lastReadKey = "",
       returnAfterLogin = null,
-      observedProgress = "";
+      observedProgress = "",
+      toolDrafts = {},
+      observedRun = store.read().runToken;
     const status = (text) => ($("#site-status").textContent = text);
     const canRead = (key) => {
       const f = files[key];
@@ -84,6 +88,32 @@
                 (key !== "clause" || flag("compared"))))))
       );
     };
+    const restarting = () =>
+      store.read().runToken !== "initial" && !store.read().introduced;
+    function adoptRun() {
+      const state = store.read();
+      if (state.runToken === observedRun) return false;
+      observedRun = state.runToken;
+      try {
+        w.sessionStorage.removeItem("harrow-session");
+        w.sessionStorage.removeItem("harrow-run-token");
+      } catch {}
+      toolDrafts = {};
+      pair = state.danny.pair.slice();
+      returnAfterLogin = null;
+      $("#site-search").value = state.danny.query;
+      w.clearTimeout(transitionTimer);
+      $("#archive-transition").hidden = true;
+      if ($("#restart-dialog").open) $("#restart-dialog").close();
+      return true;
+    }
+    function startGate() {
+      adoptRun();
+      chrome();
+      $("#site-main").classList.remove("split-reading");
+      $("#site-main").innerHTML =
+        '<h2>本轮调查尚未开始</h2><p>注销已完成。请先回找回网的开场引导，开始新一轮调查。</p><a class="restart-entry" href="index.html#home">从开场重新开始 &gt;&gt;</a>';
+    }
     const available = () =>
       Object.entries(files)
         .filter(([key]) => canRead(key) && key !== "door-back")
@@ -147,6 +177,10 @@
       return '<article id="reading-pane" class="reading-pane" tabindex="-1" hidden></article>';
     }
     function read(key, { remember = true, focus = true } = {}) {
+      if (restarting()) {
+        startGate();
+        return;
+      }
       if (!canRead(key)) {
         status("此材料尚不在当前可查阅范围。");
         return;
@@ -248,7 +282,65 @@
         target.scrollIntoView?.({ block: "start" });
       }
     }
+    function captureDrafts() {
+      if (!staff()) return;
+      for (const [id, names] of Object.entries({
+        "cabinet-form": ["code"],
+        "chain-form": ["signer", "subject", "inheritance"],
+      })) {
+        const form = $("#" + id);
+        if (form)
+          toolDrafts[id] = Object.fromEntries(
+            names.map((name) => [name, form.elements[name].value]),
+          );
+      }
+    }
+    function restoreDrafts() {
+      for (const [id, values] of Object.entries(toolDrafts)) {
+        const form = $("#" + id);
+        if (form)
+          for (const [name, value] of Object.entries(values))
+            form.elements[name].value = value;
+      }
+    }
+    function navigate(target) {
+      if (restarting()) {
+        startGate();
+        return;
+      }
+      const [section, entry] = target.split("--");
+      if (section === active) {
+        if (entry?.startsWith("tool-") && toolElement(entry.slice(5))) {
+          focusTool(entry.slice(5));
+          return;
+        }
+        const key = Object.keys(files).find((key) => files[key].id === entry);
+        if (key && canRead(key) && $(".entry-list")) {
+          read(key, { remember: false });
+          return;
+        }
+        if (!entry && $(".entry-list")) {
+          if ($("#reading-pane")) $("#reading-pane").hidden = true;
+          $("#site-main").classList.remove("split-reading");
+          focusTool("catalog");
+          return;
+        }
+      }
+      route(target);
+    }
     function route(target, { focusEntry = true } = {}) {
+      adoptRun();
+      if (restarting()) {
+        toolDrafts = {};
+        returnAfterLogin = null;
+        startGate();
+        return;
+      }
+      if (!has("trace")) {
+        store.collect(files.trace);
+        store.mark("trace");
+      }
+      captureDrafts();
       const [tab, entryId] = String(target).split("--");
       active = [
         "journal",
@@ -290,6 +382,7 @@
           listing(available().filter((f) => f.tab === active)) +
           reader();
       $("#site-main").innerHTML = html;
+      restoreDrafts();
       if (active === "archive" && staff() && flag("cabinet")) {
         renderPair();
         transition();
@@ -315,7 +408,7 @@
         entry?.startsWith("tool-") &&
         toolElement(entry.slice(5));
       w.history.pushState(null, "", "#" + tab);
-      if (!localTool) route(tab);
+      if (!localTool) navigate(tab);
     }
     function renderPair() {
       for (let i = 0; i < 2; i++) {
@@ -349,6 +442,24 @@
     d.addEventListener("click", (e) => {
       const b = e.target.closest("button,a");
       if (!b) return;
+      if (b.id === "restart-game") $("#restart-dialog").showModal();
+      if (b.id === "cancel-restart" || b.id === "keep-playing")
+        $("#restart-dialog").close();
+      if (b.id === "confirm-restart") {
+        store.reset();
+        try {
+          w.sessionStorage.removeItem("harrow-session");
+          w.sessionStorage.removeItem("harrow-run-token");
+        } catch {}
+        toolDrafts = {};
+        pair = ["", ""];
+        returnAfterLogin = null;
+        w.clearTimeout(transitionTimer);
+        $("#archive-transition").hidden = true;
+        $("#restart-dialog").close();
+        startGate();
+        return;
+      }
       const local =
         b.tagName === "A" &&
         /^danny\.html#([a-z0-9-]+)$/.exec(b.getAttribute("href") || "");
@@ -403,8 +514,10 @@
       if (b.id === "logout") {
         try {
           w.sessionStorage.removeItem("harrow-session");
+          w.sessionStorage.removeItem("harrow-run-token");
         } catch {}
         pair = ["", ""];
+        toolDrafts = {};
         w.clearTimeout(transitionTimer);
         $("#archive-transition").hidden = true;
         route("journal");
@@ -471,9 +584,18 @@
         }
         try {
           w.sessionStorage.setItem("harrow-session", "danny-private-v3");
-          if (w.sessionStorage.getItem("harrow-session") !== "danny-private-v3")
+          w.sessionStorage.setItem("harrow-run-token", store.read().runToken);
+          if (
+            w.sessionStorage.getItem("harrow-session") !== "danny-private-v3" ||
+            w.sessionStorage.getItem("harrow-run-token") !==
+              store.read().runToken
+          )
             throw Error("session");
         } catch {
+          try {
+            w.sessionStorage.removeItem("harrow-session");
+            w.sessionStorage.removeItem("harrow-run-token");
+          } catch {}
           $("#login-status").textContent =
             "无法建立本机会话，请允许会话存储后重试。";
           return;
@@ -556,17 +678,26 @@
       "compositionend",
       () => (composing = false),
     );
+    w.addEventListener("pageshow", (e) => {
+      if (e.persisted) {
+        if (!staff()) toolDrafts = {};
+        route(w.location.hash.slice(1) || "journal", { focusEntry: false });
+      }
+    });
     w.addEventListener("hashchange", () => {
-      route(w.location.hash.slice(1));
+      navigate(w.location.hash.slice(1));
     });
     w.addEventListener("storage", (e) => {
       if (e.key === store.key) {
+        const newRun = adoptRun();
         if (!flag("staff")) {
+          toolDrafts = {};
           try {
             w.sessionStorage.removeItem("harrow-session");
+            w.sessionStorage.removeItem("harrow-run-token");
           } catch {}
         }
-        if (progressSignature() !== observedProgress)
+        if (newRun || progressSignature() !== observedProgress)
           route(w.location.hash.slice(1) || active, { focusEntry: false });
         else {
           chrome({
@@ -577,8 +708,10 @@
       }
     });
     $("#site-search").value = store.read().danny.query;
-    store.collect(files.trace);
-    store.mark("trace");
+    if (!restarting()) {
+      store.collect(files.trace);
+      store.mark("trace");
+    }
     route(w.location.hash.slice(1) || "journal");
   }
   return {

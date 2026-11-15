@@ -23,9 +23,11 @@
     deletedNotes = [],
     itemCategory = "all",
     currentNav = "home",
+    displayedQuery = "",
     pendingChoice = null,
     claimDraft = "",
-    toastTimer;
+    toastTimer,
+    navigationStamp = "";
   const has = (id) => store.read().clues.some((c) => c.id === id);
   const label = {
     page: "页面入口",
@@ -231,6 +233,7 @@
     return `<button class="item" data-item="${esc(item.id)}"><span class="item-image"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="item-register-id">${esc(item.id)}</span></span><span class="item-body"><span class="item-title"><strong>${esc(item.name)}</strong><span class="badge">待认领</span></span><span class="item-description">${esc(item.description)}</span><span class="item-meta"><span>${esc(item.place)}</span><span>${esc(item.date)}</span></span></span></button>`;
   }
   function renderResults(query = "") {
+    displayedQuery = query;
     const s = store.read(),
       q = matcher.fold(query);
     const items = searchIndex
@@ -301,15 +304,36 @@
       .join("");
     $("#query-navigation").hidden =
       document.body.classList.contains("notebook-mode") ||
-      !$("#search").value ||
+      !displayedQuery ||
       history.length < 2;
     $("#query-back").disabled = s.searchCursor <= 0;
     $("#query-forward").disabled = s.searchCursor >= history.length - 1;
     $("#query-position").textContent = history.length
-      ? `${s.searchCursor + 1} / ${history.length}`
+      ? s.searchCursor < 0
+        ? "独立查阅"
+        : `${s.searchCursor + 1} / ${history.length}`
       : "";
   }
-  function search(query, { record = true } = {}) {
+  function stampNavigation() {
+    return location.hash + "|" + JSON.stringify(history.state);
+  }
+  function commitView(hash, { replace = false } = {}) {
+    const state = {
+      zhaohui: 1,
+      runToken: store.read().runToken,
+      hash,
+      query: displayedQuery,
+      cursor: store.read().searchCursor,
+    };
+    if (replace) history.replaceState(state, "", hash);
+    else if (
+      location.hash !== hash ||
+      JSON.stringify(history.state) !== JSON.stringify(state)
+    )
+      history.pushState(state, "", hash);
+    navigationStamp = stampNavigation();
+  }
+  function search(query, { record = true, syncUrl = true } = {}) {
     query = String(query).trim().slice(0, 80);
     if (!query) {
       $("#search").focus();
@@ -335,8 +359,9 @@
     updateChrome();
     whisper();
     matchInput(query, { submitted: true });
+    if (syncUrl) commitView("#search");
   }
-  function home({ remember = true, section = "home" } = {}) {
+  function home({ remember = true, section = "home", syncUrl = true } = {}) {
     itemCategory = "all";
     currentNav = section;
     if (remember) store.update((s) => (s.lastQuery = ""));
@@ -346,6 +371,7 @@
     clearMatch();
     renderResults();
     updateChrome();
+    if (syncUrl) commitView(section === "all" ? "#all" : "#home");
   }
   function renderApplication() {
     const s = store.read();
@@ -428,7 +454,8 @@
     if (localTarget && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
       e.preventDefault();
       const hash = "#" + localTarget[1];
-      if (location.hash !== hash) history.pushState(null, "", hash);
+      if (hash === "#search") $("#search").value = displayedQuery;
+      commitView(hash);
       navigateToHash(hash);
     }
     if (b.dataset.search) {
@@ -496,13 +523,15 @@
     }
     if (b.dataset.itemCategory) {
       itemCategory = b.dataset.itemCategory;
-      renderResults($("#search").value);
+      renderResults(displayedQuery);
       updateChrome();
     }
     if (b.dataset.nav) {
       e.preventDefault();
-      if (b.dataset.nav === "mine") renderMine();
-      else if (["home", "all"].includes(b.dataset.nav))
+      if (b.dataset.nav === "mine") {
+        renderMine();
+        commitView("#mine");
+      } else if (["home", "all"].includes(b.dataset.nav))
         home({ section: b.dataset.nav });
       else if (b.dataset.nav === "guide")
         modal(
@@ -588,7 +617,7 @@
       );
     if (b.id === "notebook-return") {
       document.body.classList.remove("notebook-mode");
-      store.read().lastQuery ? search(store.read().lastQuery) : home();
+      displayedQuery ? search(displayedQuery) : home({ section: currentNav });
     }
     if (b.id === "close-modal" || b.id === "cancel-choice") {
       $("#modal").close();
@@ -623,24 +652,38 @@
           ? "个人站的公开随记、相册与留言可能相互解释。过期信息可以用生效日期排除。"
           : "除了名称，也可以试试描述里的地点和物品特征，登记通常保留了来源说明。";
     }
+    if (b.hasAttribute("data-reset-game")) $("#reset").click();
     if (b.id === "reset")
       modal(
-        "清除本机记录",
-        '<h2>重新开始新版调查？</h2><p>将清除新版线索、笔记和结局；旧版存档不受影响。</p><button id="confirm-reset" class="record-action">清除新版记录</button>',
+        "注销并重新开始",
+        '<h2>注销并从头开始游戏？</h2><p>本轮的进度、线索、笔记、登记和结局将被清除，员工登录也会退出。确认后回到开场引导。</p><button id="confirm-reset" class="record-action">确认注销并重新开始</button><button id="cancel-choice" class="text-link">取消，继续本轮游戏</button>',
       );
     if (b.id === "confirm-reset") {
       store.reset();
       try {
         sessionStorage.removeItem("harrow-session");
+        sessionStorage.removeItem("harrow-run-token");
       } catch {}
       selected = [];
       mineQuery = "";
+      mineFilter = "all";
       deletedNotes = [];
       claimDraft = "";
       $("#application-panel")?.remove();
-      $("#modal").close();
-      home();
-      $("#intro").showModal();
+      document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+      home({ syncUrl: false });
+      commitView("#home", { replace: true });
+      syncAssist();
+      clearTimeout(toastTimer);
+      $("#toast").hidden = true;
+      $("#toast").replaceChildren();
+      $("#intro-form").reset();
+      $("#hint-content").hidden = true;
+      $("#hint-toggle").setAttribute("aria-expanded", "false");
+      $("#hint-body").textContent = "";
+      $("#ending-reveal").hidden = true;
+      $("#ending-name").textContent = "";
+      if (!$("#intro").open) $("#intro").showModal();
     }
   });
   document.addEventListener("change", (e) => {
@@ -781,20 +824,51 @@
   });
   window.addEventListener("storage", (e) => {
     if (e.key !== store.key) return;
-    if (document.body.classList.contains("notebook-mode")) renderMine();
-    else {
-      renderResults($("#search").value);
+    if (
+      history.state?.zhaohui === 1 &&
+      (history.state.runToken || "initial") !== store.read().runToken
+    ) {
+      restoreNavigation();
+      return;
+    }
+    if (document.body.classList.contains("notebook-mode")) {
+      const input = $("#notebook-search"),
+        editing = document.activeElement === input,
+        draft = input?.value,
+        start = input?.selectionStart,
+        end = input?.selectionEnd;
+      renderMine();
+      if (editing) {
+        const restored = $("#notebook-search");
+        restored.value = draft;
+        restored.focus({ preventScroll: true });
+        restored.setSelectionRange(start, end);
+      }
+    } else {
+      renderResults(displayedQuery);
       updateChrome();
     }
   });
   $("#modal").addEventListener("close", () => {
     pendingChoice = null;
   });
-  const savedQuery = store.read().lastQuery;
-  home({ remember: false });
+  const startupState = history.state;
+  const expiredNavigation =
+    startupState?.zhaohui === 1 &&
+    (startupState.runToken || "initial") !== store.read().runToken;
+  if (expiredNavigation) history.replaceState(null, "", "#home");
+  const savedQuery = expiredNavigation
+    ? ""
+    : startupState?.zhaohui === 1 && startupState.hash === location.hash
+      ? String(startupState.query || "").slice(0, 80)
+      : store.read().lastQuery;
+  home({ remember: false, syncUrl: false });
   syncAssist();
   if (savedQuery)
-    search(savedQuery, { record: !store.read().searchHistory.length });
+    search(savedQuery, {
+      record: !store.read().searchHistory.length,
+      syncUrl: false,
+    });
   function navigateToHash(hash) {
     if ($("#modal").open) $("#modal").close();
     if (hash === "#mine") {
@@ -804,7 +878,7 @@
     }
     if (hash === "#application") {
       document.body.classList.remove("notebook-mode");
-      renderResults($("#search").value);
+      renderResults(displayedQuery);
       updateChrome();
       if (!$("#application-panel").hidden) {
         $("#application-panel").scrollIntoView?.({ block: "start" });
@@ -812,19 +886,65 @@
       }
       return;
     }
+    if (hash === "#home" || hash === "#all") {
+      home({ section: hash === "#all" ? "all" : "home", syncUrl: false });
+      return;
+    }
     if (hash === "#search" || !hash) {
       document.body.classList.remove("notebook-mode");
       const query = $("#search").value;
-      if (query) search(query, { record: false });
-      else home({ remember: false });
+      if (query) search(query, { record: false, syncUrl: false });
+      else home({ remember: false, syncUrl: false });
       if (hash) {
         $(".search-section").scrollIntoView?.({ block: "start" });
         $("#search").focus({ preventScroll: true });
       }
     }
   }
-  window.addEventListener("hashchange", () => navigateToHash(location.hash));
-  if (!store.read().introduced) $("#intro").showModal();
-  if (["#mine", "#application", "#search"].includes(location.hash))
+  function restoreNavigation() {
+    const snapshot = history.state;
+    if (
+      snapshot?.zhaohui === 1 &&
+      (snapshot.runToken || "initial") !== store.read().runToken
+    ) {
+      document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+      claimDraft = "";
+      $("#application-panel")?.remove();
+      home({ remember: false, syncUrl: false });
+      commitView("#home", { replace: true });
+      if (!store.read().introduced) $("#intro").showModal();
+      return;
+    }
+    if (navigationStamp === stampNavigation()) return;
+    navigationStamp = stampNavigation();
+    const saved = history.state;
+    if (saved?.zhaohui === 1 && saved.hash === location.hash) {
+      $("#search").value = String(saved.query || "").slice(0, 80);
+      if (location.hash === "#search") {
+        const queries = store.read().searchHistory,
+          query = $("#search").value;
+        const cursor =
+          queries[saved.cursor] === query
+            ? saved.cursor
+            : queries.lastIndexOf(query);
+        store.update((s) => (s.searchCursor = cursor));
+      }
+    }
     navigateToHash(location.hash);
+  }
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) restoreNavigation();
+  });
+  window.addEventListener("popstate", restoreNavigation);
+  window.addEventListener("hashchange", restoreNavigation);
+  if (!store.read().introduced) $("#intro").showModal();
+  if (
+    ["#mine", "#application", "#search", "#home", "#all"].includes(
+      location.hash,
+    )
+  )
+    navigateToHash(location.hash);
+  commitView(location.hash || ($("#search").value ? "#search" : "#home"), {
+    replace: true,
+  });
 })();

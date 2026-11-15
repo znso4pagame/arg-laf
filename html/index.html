@@ -46,7 +46,15 @@
           拾物登记 <span>↗</span></button
         ><button class="nav" data-nav="mine">
           我的 <span id="my-count">0</span></button
-        ><button class="nav" data-nav="guide">认领须知</button>
+        ><button class="nav" data-nav="guide">认领须知</button
+        ><button
+          class="nav nav-restart"
+          type="button"
+          data-reset-game
+          title="注销并清除本轮记录，从开场重新开始"
+        >
+          注销
+        </button>
       </nav>
       <span class="header-note">遗失物品信息查询与登记服务</span>
     </header>
@@ -279,7 +287,7 @@
       <div class="footer-bottom">
         <span>© 2024 找回网 · 所有遗失，均有记录。</span
         ><span id="staff-count">本站员工：1</span
-        ><button id="reset">清除本机记录</button>
+        ><button id="reset">注销并重新开始</button>
       </div>
     </footer>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

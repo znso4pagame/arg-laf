@@ -2184,3 +2184,162 @@ body > .utility {
     min-height: 32px;
   }
 }
+/* 注销明确表示重新开始，与仅退出员工会话分开。 */
+.nav.nav-restart {
+  margin-left: auto;
+  color: #e1e7eb;
+  font-size: 12px;
+  border-left: 1px solid #ffffff26;
+}
+.site-nav > .site-restart {
+  margin-left: auto;
+  min-height: 42px;
+  padding: 9px 18px;
+  border: 0;
+  border-left: 1px solid #bdc9b4;
+  background: transparent;
+  box-shadow: none;
+  color: #7f886f;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.site-nav > .site-restart:hover {
+  background: #e7ebdf;
+  color: #5d6c51;
+}
+.restart-dialog {
+  width: min(560px, calc(100% - 24px));
+  padding: 0;
+  border: 1px solid #a7b697;
+  background: #f6f7ee;
+  color: #57674d;
+}
+.restart-dialog .modal-head {
+  background: #e9eedd;
+  color: #6a7e59;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+}
+.restart-dialog .modal-head button {
+  border: 1px solid #b8c5a9;
+  background: #f7f8ee;
+  color: #708162;
+  font-size: 19px;
+}
+.reset-body {
+  padding: 22px 24px;
+}
+.reset-body h2 {
+  font:
+    21px/1.6 "Songti SC",
+    "SimSun",
+    serif;
+  margin: 0 0 15px;
+  color: #5d704f;
+}
+.reset-body p {
+  font-size: 13px;
+  line-height: 1.95;
+  color: #839076;
+}
+.reset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+.reset-actions > a {
+  display: inline-block;
+  border: 1px solid #b1c19f;
+  background: #e8efdb;
+  color: #627b4e;
+  padding: 9px 13px;
+  font-size: 12px;
+  text-decoration: none;
+}
+.reset-actions > button {
+  font-size: 12px;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: #8b997b;
+  cursor: pointer;
+}
+.restart-entry {
+  display: inline-block;
+  padding: 10px 14px;
+  border: 1px solid #b8c8a7;
+  background: #edf2e3;
+  margin-top: 14px;
+}
+@media (max-width: 760px) {
+  .nav.nav-restart {
+    padding-inline: 15px;
+  }
+  .site-nav > .site-restart {
+    padding-inline: 14px;
+  }
+  .reset-body {
+    padding: 20px;
+  }
+  .reset-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .reset-actions > a {
+    text-align: center;
+  }
+  .reset-actions > button {
+    min-height: 40px;
+  }
+}
+.top-strip > .site-restart {
+  flex: 0 0 auto;
+  font:
+    11px/1.6 Tahoma,
+    "SimSun",
+    serif;
+  letter-spacing: 0;
+  padding: 4px 10px;
+  min-height: 30px;
+  border: 1px solid #7e9484;
+  background: #43594e;
+  box-shadow: none;
+  color: #e1e8da;
+  cursor: pointer;
+}
+.top-strip > .site-restart:hover {
+  background: #536c5a;
+  color: white;
+}
+.top-strip {
+  align-items: center;
+  gap: 10px;
+}
+.top-strip > span {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.top-strip > a {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .nav.nav-restart {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: #2a628a;
+    flex: 0 0 auto;
+  }
+  .top-strip {
+    padding: 7px 12px;
+    letter-spacing: 1px;
+  }
+  .top-strip > .site-restart {
+    min-height: 32px;
+  }
+}
