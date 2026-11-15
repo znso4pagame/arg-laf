@@ -193,3 +193,65 @@ test('本地存储受限、损坏数据和减少动态效果均能运行', t => 
   const c=boot(t,{reduced:true}); c.route(); c.input('[name="claimant"]','测试'); c.input('[name="reason"]','测试理由'); c.submit('#claim-form'); c.tick(0);
   assert.equal(c.$('#ending-reveal').hidden,false);
 });
+
+test('手记按需分三层揭示，不会预先显示深层词条', t => {
+  const a = boot(t);
+  assert.equal(a.$('#hint-content').hidden,true);
+  assert.equal(a.$('#hint-search').hasAttribute('data-search'),false);
+  a.click('#hint-toggle');
+  assert.match(a.$('#hint-tier').textContent,/第一札/);
+  assert.doesNotMatch(a.$('#hint-body').textContent,/B3|小鹿|岗位|认领表/);
+  assert.equal(a.$('#hint-search').hidden,true);
+  a.click('#hint-next'); assert.match(a.$('#hint-tier').textContent,/第二札/);
+  assert.equal(a.$('#hint-search').hidden,true);
+  a.click('#hint-next'); assert.equal(a.$('#hint-search').dataset.search,'钱包');
+  assert.equal(a.$('#hint-next').hidden,true);
+  a.click('#hint-search'); a.tick();
+  assert.equal(a.$('#field-guide').dataset.hint,'identity');
+  assert.equal(a.$('#hint-content').hidden,true);
+});
+
+test('仅沿手记的可用关键词就能走通主线，且不会在层级门槛卡住', t => {
+  const a = boot(t); const visited = [];
+  for (let i=0; i<20; i++) {
+    if (a.$('#field-guide').hidden) break;
+    a.click('#hint-toggle');
+    while (!a.$('#hint-next').hidden) a.click('#hint-next');
+    const query = a.$('#hint-search').dataset.search;
+    assert.ok(query, '有可查询的当前阶段词条');
+    assert.ok(!visited.includes(query), `不会循环提示 ${query}`);
+    visited.push(query); a.click('#hint-search'); a.tick();
+  }
+  assert.equal(a.$('#field-guide').hidden,true);
+  assert.ok(visited.includes('0003'));
+  assert.ok(visited.includes('他问了什么'));
+  assert.ok(visited.includes('认领表'));
+  assert.equal(visited.at(-1),'岗位职责');
+  assert.equal(a.state().seen.includes('岗位职责'),true);
+  assert.equal(a.$('#return-claim').hidden,false);
+  assert.equal(a.$('#hint-search').hasAttribute('data-search'),false);
+});
+
+test('合上手记不会被普通查询自动展开，已翻页数可保留和重置', t => {
+  const a = boot(t); a.search('钱包'); a.click('#hint-toggle'); a.click('#hint-next');
+  a.click('#hint-toggle'); assert.equal(a.$('#hint-content').hidden,true);
+  a.search('钥匙'); assert.equal(a.$('#hint-content').hidden,true);
+  a.click('#hint-toggle'); assert.match(a.$('#hint-tier').textContent,/第二札/);
+  const b = boot(t,{saved:a.state()});
+  assert.equal(b.$('#hint-content').hidden,true); b.click('#hint-toggle');
+  assert.match(b.$('#hint-tier').textContent,/第二札/);
+  b.click('#reset'); b.click('#confirm-reset');
+  assert.deepEqual(b.state().hintLevels,{});
+  assert.equal(b.$('#hint-content').hidden,true);
+});
+
+test('跳过早期词条时手记跟随当前证据；两种结局都停止提示', t => {
+  const a = boot(t); a.search('B3');
+  assert.equal(a.$('#field-guide').dataset.hint,'employee');
+  a.search('0003'); assert.equal(a.$('#field-guide').dataset.hint,'visitor');
+  a.route(); a.click('#leave'); assert.equal(a.$('#field-guide').hidden,true);
+  const b = boot(t); b.route();
+  b.input('[name="claimant"]','测试'); b.input('[name="reason"]','测试理由'); b.submit('#claim-form'); b.tick(); b.click('#return-home');
+  assert.equal(b.$('#field-guide').hidden,true);
+  assert.equal(b.$('#service-state').textContent,'INDEX / ONLINE');
+});

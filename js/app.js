@@ -4,7 +4,7 @@
   const data = window.ZHAOHUI;
   const key = 'zhaohui-story-v1';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const fresh = () => ({ seen: [], level: 0, original: '', ending: '', name: '', waiting: false, history: [], draft: { name: '', reason: '' }, registrations: [], applications: {}, badgeVisits: 0 });
+  const fresh = () => ({ seen: [], level: 0, original: '', ending: '', name: '', waiting: false, history: [], hintLevels: {}, draft: { name: '', reason: '' }, registrations: [], applications: {}, badgeVisits: 0 });
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let storageAvailable = true;
   function readState(raw) {
@@ -19,6 +19,11 @@
       next.original = typeof saved.original === 'string' ? saved.original.slice(0, 80) : '';
       next.waiting = saved.waiting === true;
       next.history = Array.isArray(saved.history) ? saved.history.filter(x => typeof x === 'string').slice(-12) : [];
+      if (saved.hintLevels && typeof saved.hintLevels === 'object') {
+        for (const [id, level] of Object.entries(saved.hintLevels)) {
+          if (Object.hasOwn(data.hints, id) && Number.isInteger(level) && level >= 1 && level <= 3) next.hintLevels[id] = level;
+        }
+      }
       next.draft = { name: String(saved.draft?.name || '').slice(0, 30), reason: String(saved.draft?.reason || '').slice(0, 300) };
       next.registrations = Array.isArray(saved.registrations) ? saved.registrations.filter(x => x && typeof x.id === 'string' && x.id.startsWith('L') && ['name','place','description','type','date'].every(k => typeof x[k] === 'string')).slice(0, 50) : [];
       if (saved.applications && typeof saved.applications === 'object') for (const [id, value] of Object.entries(saved.applications)) { if (value && typeof value.receipt === 'string') next.applications[id] = { receipt: value.receipt.slice(0,80) }; }
@@ -34,7 +39,7 @@
   }
   resolveDeparture();
   let requestId = 0, suggestionId = 0, endingId = 0, toastTimer;
-  let composing = false, submitting = false, activeQuery = '', modalTrigger;
+  let composing = false, submitting = false, activeQuery = '', openGuide = '', modalTrigger;
   const pendingTimers = new Set();
   function later(callback, delay) {
     const id = setTimeout(() => { pendingTimers.delete(id); callback(); }, reduceMotion.matches ? 0 : delay);
@@ -102,7 +107,7 @@
   };
   function renderCard(item, anomaly = false) {
     const pending = Object.hasOwn(state.applications, item.id);
-    return `<button class="item ${anomaly ? 'anomaly' : ''}" data-item="${escape(item.id)}"><span class="item-image"><span class="item-code">ZH / ${escape(item.id)}</span>${icon(item.icon)}<span class="item-view">查看登记 ↗</span></span><span class="item-body"><span class="item-title"><strong>${escape(item.name)}</strong><span class="badge">${pending ? '审核中' : '待认领'}</span></span><span class="item-description">${escape(item.description)}</span><span class="item-meta"><span>⌖ ${escape(item.place)}</span><time>${escape(item.date)}</time></span></span></button>`;
+    return `<button class="item ${anomaly ? 'anomaly' : ''}" data-item="${escape(item.id)}"><span class="item-image"><span class="item-code">ZH / ${escape(item.id)}</span>${icon(item.icon)}<span class="item-view">查看登记 ↗</span></span><span class="item-body"><span class="item-title"><strong>${escape(item.name)}</strong><span class="badge">${pending ? '审核中' : anomaly && !state.ending ? '信息不全' : '待认领'}</span></span><span class="item-description">${escape(item.description)}</span><span class="item-meta"><span>⌖ ${escape(item.place)}</span><time>${escape(item.date)}</time></span></span></button>`;
   }
   function board(items = allItems(), anomalous = false) {
     let cards = items.map(item => renderCard(item)).join('');
@@ -155,10 +160,66 @@
     if (state.level === 2) return ['上一个', '他问了什么'];
     return state.seen.includes('岗位职责') ? [] : ['我的东西', '认领表'];
   }
+  function currentHint() {
+    const seen = word => state.seen.includes(word);
+    // 最后的沉默和已完成的结局不再追加指引，选择留给玩家。
+    if (state.ending || seen('岗位职责')) return null;
+    if (state.level === 0) {
+      if (seen('你在哪')) return 'basement';
+      if (seen('我是小鹿')) return 'location';
+      if (seen('你是谁')) return 'name';
+      return state.original ? 'identity' : 'start';
+    }
+    if (state.level === 1) {
+      if (!seen('入职记录')) return 'employee';
+      return seen('0002') ? 'chain' : 'previous';
+    }
+    if (state.level === 2) return seen('上一个') ? 'cache' : 'visitor';
+    if (!seen('我的东西')) return 'property';
+    if (!seen('审核')) return 'audit';
+    if (!seen('认领表')) return 'claim';
+    return seen('免责条款') ? 'duties' : 'terms';
+  }
+  function renderGuide() {
+    const id = currentHint();
+    const panel = $('#field-guide');
+    panel.hidden = !id;
+    document.body.dataset.archiveLevel = String(state.level);
+    const status = $('#service-state');
+    status.textContent = state.ending ? 'INDEX / ONLINE' : state.level > 0 ? 'LEGACY INDEX / LINKED' : 'INDEX / ONLINE';
+    if (!id) {
+      openGuide = '';
+      if (panel.contains(document.activeElement)) $('#search').focus({ preventScroll: true });
+      panel.removeAttribute('data-hint');
+      $('#hint-content').hidden = true; $('#hint-body').textContent = '';
+      $('#hint-search').hidden = true; $('#hint-search').removeAttribute('data-search');
+      $('#hint-toggle').setAttribute('aria-expanded','false');
+      return;
+    }
+    panel.dataset.hint = id;
+    if (openGuide !== id) openGuide = '';
+    const level = state.hintLevels[id] || 0;
+    const expanded = openGuide === id && level > 0;
+    $('#hint-content').hidden = !expanded;
+    $('#hint-toggle').setAttribute('aria-expanded', String(expanded));
+    $('#hint-toggle').innerHTML = expanded ? '合上手记 <span aria-hidden="true">−</span>' : '翻阅提示 <span aria-hidden="true">＋</span>';
+    $('#hint-body').textContent = level ? data.hints[id].notes[level - 1] : '';
+    $('#hint-tier').textContent = ['','第一札 · 观察','第二札 · 思路','第三札 · 索引'][level] || '';
+    $('#hint-count').textContent = `0${level} / 03`;
+    $('#hint-next').hidden = level === 3;
+    $('#hint-search').hidden = level !== 3;
+    if (level === 3) {
+      $('#hint-search').dataset.search = data.hints[id].keyword;
+      $('#hint-search').textContent = `检索「${data.hints[id].keyword}」 ↗`;
+    } else {
+      $('#hint-search').removeAttribute('data-search'); $('#hint-search').textContent = '';
+    }
+  }
   function renderTrail() {
     $('#history-list').innerHTML = state.history.slice().reverse().map(q => `<button type="button" data-search="${escape(q)}" ${q === activeQuery ? 'aria-current="true"' : ''}>${escape(q)}<span>↗</span></button>`).join('');
     $('#history-panel').hidden = !state.history.length;
     $('#return-claim').hidden = !(state.waiting && !state.ending);
+    renderGuide();
   }
   function setMeta(text) { $('#result-meta').hidden = false; $('#result-meta').textContent = text; }
   function search(raw) {
@@ -339,6 +400,21 @@
   });
   $('#modal').addEventListener('close', () => { if (modalTrigger?.isConnected) modalTrigger.focus({ preventScroll: true }); });
   $('#show-all').addEventListener('click', () => home(true));
+  $('#hint-toggle').addEventListener('click', () => {
+    const id = currentHint(); if (!id) return;
+    // 合上只收起界面，不遗忘已翻阅的页数。再次翻阅从原处继续。
+    if (!$('#hint-content').hidden) {
+      openGuide = ''; renderGuide();
+    } else {
+      openGuide = id; state.hintLevels[id] ||= 1; renderGuide(); save();
+    }
+  });
+  $('#hint-next').addEventListener('click', () => {
+    const id = currentHint(); if (!id) return;
+    state.hintLevels[id] = Math.min(3, (state.hintLevels[id] || 0) + 1);
+    renderGuide(); save();
+    if (state.hintLevels[id] === 3) $('#hint-search').focus({ preventScroll: true });
+  });
   $('#return-claim').addEventListener('click', () => { search('认领表'); $('#search').focus({ preventScroll: true }); });
   $('#return-home').addEventListener('click', finishEnding);
   $('#ending').addEventListener('cancel', event => { event.preventDefault(); if ($('#ending').classList.contains('is-complete')) finishEnding(); });
