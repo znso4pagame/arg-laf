@@ -24,6 +24,7 @@ function boot(
   session = memory(),
   hash = "",
   navigationState = null,
+  motionOptions = null,
 ) {
   const html = fs.readFileSync(path.join(root, "html", page + ".html"), "utf8");
   const dom = new JSDOM(html, {
@@ -43,7 +44,60 @@ function boot(
     return timers.length;
   };
   w.clearTimeout = () => {};
-  w.matchMedia = () => ({ matches: false });
+  const media = {
+    matches: !!motionOptions?.systemReduced,
+    listeners: [],
+    addEventListener(type, fn) {
+      if (type === "change") this.listeners.push(fn);
+    },
+    change(value) {
+      this.matches = value;
+      this.listeners.forEach((fn) => fn({ matches: value }));
+    },
+  };
+  w.matchMedia = () => media;
+  const effects = [];
+  if (motionOptions?.animate) {
+    w.HTMLElement.prototype.animate = function (frames, options) {
+      if (motionOptions.fail) throw new Error("Animation unavailable");
+      let resolve, reject;
+      const finished = new Promise((a, b) => {
+        resolve = a;
+        reject = b;
+      });
+      const effect = {
+        element: this,
+        frames,
+        options,
+        finished,
+        cancelled: false,
+        complete: false,
+        cancel() {
+          this.cancelled = true;
+          reject(new Error("cancelled"));
+        },
+        finish() {
+          this.complete = true;
+          resolve();
+        },
+      };
+      effects.push(effect);
+      return effect;
+    };
+  }
+  if (motionOptions?.geometry) {
+    const original = w.HTMLElement.prototype.getBoundingClientRect;
+    w.HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.matches("[data-event]"))
+        return new w.DOMRect(
+          0,
+          [...this.parentElement.children].indexOf(this) * 50,
+          300,
+          44,
+        );
+      return original.call(this);
+    };
+  }
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.HTMLDialogElement.prototype.showModal = function () {
     this.open = true;
@@ -80,6 +134,8 @@ function boot(
   return {
     w,
     d,
+    effects,
+    media,
     $,
     click,
     set,
@@ -1534,4 +1590,137 @@ test("注销后可完整重玩：开场、登录、两条调查线、核验与�
   assert.equal(final.state().runToken, token);
   assert.equal(final.state().notes.length, 0);
   assert.match(final.$("#staff-count").textContent, /0/);
+});
+
+test("快速切换查询会取消旧动效，内容和输入在动画未完成时已经可用", (t) => {
+  const a = boot(t, "index", memory(), memory(), "", null, { animate: true });
+  a.click("#intro-skip");
+  a.search("钱包");
+  const previous = a.effects.findLast((x) =>
+    x.element.matches('[data-item="0816"]'),
+  );
+  assert.ok(previous);
+  assert.equal(previous.complete, false);
+  a.search("耳机");
+  assert.equal(previous.cancelled, true);
+  assert.ok(a.$('[data-item="0814"]'));
+  assert.equal(a.state().lastQuery, "耳机");
+  assert.equal(a.$("#search").disabled, false);
+  assert.ok(a.effects.findLast((x) => x.element.matches('[data-item="0814"]')));
+});
+test("材料展开与翻面不等待动效，连续操作会取消已移除内容的动画", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "", null, { animate: true });
+  a.click("[data-read=rain]");
+  const opening = a.effects.findLast((x) => x.element.id === "reading-pane");
+  a.click("[data-read=tea]");
+  assert.equal(opening.cancelled, true);
+  assert.ok(a.state().clues.some((x) => x.id === "rain"));
+  assert.ok(a.state().clues.some((x) => x.id === "tea"));
+  a.click("[data-tab=photos]");
+  a.click("[data-read=door-front]");
+  a.click("[data-read=door-back]");
+  const turning = a.effects.findLast((x) =>
+    x.element.classList.contains("image-viewport"),
+  );
+  assert.ok(
+    turning.frames.some((frame) => frame.transform?.includes("rotateY")),
+  );
+  assert.equal(turning.complete, false);
+  assert.ok(a.state().clues.some((x) => x.id === "door-back"));
+  assert.match(a.$("#reading-pane h2").textContent, /背面/);
+});
+test("手动和系统减少动态效果都会取消进行中的动画，操作逻辑继续即时生效", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local, memory(), "", null, { animate: true });
+  a.click("#intro-skip");
+  a.search("钱包");
+  a.click("#motion-toggle");
+  assert.equal(a.w.document.documentElement.dataset.motion, "reduced");
+  assert.equal(a.$("#motion-toggle").getAttribute("aria-pressed"), "true");
+  assert.ok(a.effects.every((x) => x.cancelled));
+  const count = a.effects.length;
+  a.search("雨伞");
+  assert.equal(a.effects.length, count);
+  assert.ok(a.$('[data-item="0812"]'));
+  a.click("#motion-toggle");
+  a.search("相机");
+  assert.ok(a.effects.length > count);
+  a.media.change(true);
+  assert.equal(a.w.document.documentElement.dataset.motion, "reduced");
+  assert.ok(a.effects.every((x) => x.cancelled));
+  const paused = a.effects.length;
+  a.search("钥匙");
+  assert.equal(a.effects.length, paused);
+  a.media.change(false);
+  assert.equal(a.w.document.documentElement.dataset.motion, "full");
+});
+test("动画 API 缺失或报错均不阻断调查，保存内容不依赖动画完成回调", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#photos", null, {
+    animate: true,
+    fail: true,
+  });
+  a.click("[data-read=door-front]");
+  a.click("[data-read=door-back]");
+  assert.equal(a.effects.length, 0);
+  assert.ok(a.state().clues.some((x) => x.id === "door-back"));
+  assert.match(a.$("#reading-pane h2").textContent, /背面/);
+  const b = boot(t);
+  b.click("#intro-skip");
+  b.search("钱包");
+  assert.ok(b.$('[data-item="0816"]'));
+});
+test("记录重排立即改变顺序并保留键盘焦点，动画只描绘位置变化", (t) => {
+  const local = memory(),
+    session = memory();
+  login(t, local, session);
+  const a = boot(t, "danny", local, session, "#work", null, {
+    animate: true,
+    geometry: true,
+  });
+  const before = a.state().danny.timeline.indexOf("keys");
+  a.click('[data-move=keys][data-direction="-1"]');
+  assert.equal(a.state().danny.timeline.indexOf("keys"), before - 1);
+  assert.equal(a.d.activeElement.dataset.move, "keys");
+  assert.ok(
+    a.effects.some(
+      (x) =>
+        x.element.hasAttribute("data-event") &&
+        x.frames.some((frame) => frame.transform?.includes("50px")),
+    ),
+  );
+  assert.ok(!a.state().flags.includes("timeline"));
+});
+test("对照时仅更新换过的纸张，另一份材料的阅读位置不会被动画重置", (t) => {
+  const a = cabinet(t, memory(), memory());
+  choose(a, "left", "municipalA");
+  const content = a.$("#compare-doc-left").firstElementChild;
+  a.$("#compare-doc-left").scrollTop = 80;
+  choose(a, "right", "municipalB");
+  assert.equal(a.$("#compare-doc-left").firstElementChild, content);
+  assert.equal(a.$("#compare-doc-left").scrollTop, 80);
+});
+test("其他窗口的普通更新不会重播列表入场，页面离开会清理仍在运行的动画", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local, memory(), "", null, { animate: true });
+  a.click("#intro-skip");
+  a.search("钱包");
+  const count = a.effects.length;
+  makeStore(local).addNote("旁页", "更新");
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.effects.length, count);
+  a.search("耳机");
+  a.w.dispatchEvent(new a.w.Event("pagehide"));
+  assert.ok(a.effects.every((x) => x.cancelled));
+});
+test("已经结束的动画会正常清理，后续取消不会再次操作它", async (t) => {
+  const a = boot(t, "danny", memory(), memory(), "", null, { animate: true });
+  a.click("[data-read=rain]");
+  const effect = a.effects.findLast((x) => x.element.id === "reading-pane");
+  effect.finish();
+  await Promise.resolve();
+  a.w.ZHAOHUI_MOTION.cancelAll();
+  assert.equal(effect.cancelled, false);
+  assert.equal(effect.complete, true);
 });

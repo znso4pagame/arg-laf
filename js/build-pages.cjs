@@ -32,6 +32,7 @@ function buildSite(destination = path.join(root, "_site")) {
     "js/danny.js",
     "js/timeline.js",
     "js/journey-guide.js",
+    "js/motion.js",
     "js/search-index.js",
   ];
   const manifest = {};

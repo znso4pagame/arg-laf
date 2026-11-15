@@ -4,7 +4,8 @@
     store = window.ZHAOHUI_JOURNEY,
     data = window.ZHAOHUI,
     matcher = window.ZHAOHUI_MATCHER,
-    searchIndex = window.ZHAOHUI_SEARCH;
+    searchIndex = window.ZHAOHUI_SEARCH,
+    motion = window.ZHAOHUI_MOTION;
   const esc = (v) =>
     String(v ?? "").replace(
       /[&<>"']/g,
@@ -53,12 +54,14 @@
   }
   function modal(title, html) {
     $("#modal-label").textContent = title;
+    motion.cancelTree($("#modal-body"));
     $("#modal-body").innerHTML = html;
     $("#modal").classList.toggle(
       "comparison-dialog",
       !!$("#modal-body .comparison-columns"),
     );
     if (!$("#modal").open) $("#modal").showModal();
+    motion.enter($("#modal-body"));
   }
   function fileBody(file) {
     return `${file.fields?.length ? `<dl class="detail-list">${file.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${file.image ? `<a href="${esc(file.image)}" target="_blank" rel="noopener"><img class="evidence-image" src="${esc(file.image)}" alt="${esc(file.title)}"></a>` : ""}${(file.body || []).map((t) => `<p>${esc(t)}</p>`).join("")}`;
@@ -73,6 +76,14 @@
   }
   function updateChrome() {
     const s = store.read();
+    motion.sync();
+    const motionToggle = $("#motion-toggle");
+    if (motionToggle) {
+      motionToggle.setAttribute("aria-pressed", String(s.settings.reduced));
+      motionToggle.textContent = s.settings.reduced
+        ? "已减少动态效果"
+        : "减少动态效果";
+    }
     let guide = $("#journey-guide");
     if (!guide) {
       guide = document.createElement("section");
@@ -194,9 +205,11 @@
                 ? ["我是小鹿。", "旧记录还在。"]
                 : ["你看到旧档了。", "我还在等。"];
     $("#suggestions").hidden = false;
+    motion.cancelTree($("#suggestions"));
     $("#suggestions").innerHTML = words
       .map((t) => `<div class="suggestion-response">${esc(t)}</div>`)
       .join("");
+    motion.enter($("#suggestions"), { items: ".suggestion-response" });
     store.collect({
       id,
       kind: "message",
@@ -290,6 +303,7 @@
           `<button data-item-category="${id}" aria-pressed="${itemCategory === id}">${name}</button>`,
       )
       .join("")}</div>`;
+    motion.cancelTree($("#results"));
     $("#results").innerHTML = filters + html;
     renderApplication();
   }
@@ -360,6 +374,7 @@
     whisper();
     matchInput(query, { submitted: true });
     if (syncUrl) commitView("#search");
+    motion.enter($("#results"), { items: ".item" });
   }
   function home({ remember = true, section = "home", syncUrl = true } = {}) {
     itemCategory = "all";
@@ -372,6 +387,7 @@
     renderResults();
     updateChrome();
     if (syncUrl) commitView(section === "all" ? "#all" : "#home");
+    motion.enter($("#results"), { items: ".item" });
   }
   function renderApplication() {
     const s = store.read();
@@ -390,7 +406,7 @@
       !!s.ending;
     panel.innerHTML = `<h2>特殊人员认领申请</h2><p>员工站附件关联到客服 0001 的人员认领。这不是你失物的领取单。${s.flags.includes("verified") ? "你已经完成归档关系核验。" : "资料尚未全部核对，可以继续调查后再决定。"}</p><a href="danny.html#archive">回归档室核对材料 &gt;&gt;</a><form id="claim-form" class="claim-form"><label>认领对象<input value="小鹿 / 客服 0001" readonly></label><label>认领人姓名<input name="name" value="${esc(claimDraft)}" required maxlength="30" autocomplete="off"></label><label class="claim-terms">认领人承担该对象在系统中遗留的全部责任、义务与岗位职责。提交前将再次核对。</label><button class="record-action" type="submit">核对并准备签署</button><button class="text-link" type="button" id="leave">放弃本次认领</button></form>`;
   }
-  function renderMine() {
+  function renderMine({ animate = false } = {}) {
     document.body.classList.add("notebook-mode");
     $("#suggestions").hidden = true;
     clearMatch();
@@ -406,6 +422,7 @@
           c.kind === mineFilter,
       );
     const notes = searchIndex.matches(mineQuery, s.notes);
+    motion.cancelTree($("#results"));
     $("#results").innerHTML =
       `<section class="notebook"><div class="notebook-top"><p>这里保存已经取得的材料。个人备注仅代表推测，不会自动解锁剧情。</p><button class="text-link" id="notebook-return">返回查阅 &gt;&gt;</button></div><form id="notebook-search-form" class="notebook-search"><label class="sr-only" for="notebook-search">搜索收藏与备注</label><input id="notebook-search" value="${esc(mineQuery)}" placeholder="搜索标题、正文、字段和自己的备注" maxlength="80"><button>查找材料</button>${mineQuery ? '<button type="button" id="clear-notebook-search">清除筛选</button>' : ""}</form><div class="notebook-tabs">${[
         ["all", "全部"],
@@ -424,6 +441,7 @@
           "",
         )}</div><div class="compare-toolbar"><span id="compare-count">已选 ${selected.length} / 2 份材料</span><button id="compare-files" ${selected.length !== 2 ? "disabled" : ""}>并排对照</button><button id="new-note">写一条笔记</button><button id="export-notebook">导出线索与笔记</button></div>${mineFilter !== "note" ? entries.map((c) => `<article class="notebook-card"><div class="notebook-card-head"><span>${label[c.kind]}</span><button data-star="${esc(c.id)}" aria-pressed="${c.starred}">${c.starred ? "★ 已标重点" : "☆ 标记重点"}</button></div><h3>${esc(c.title)}</h3><p>${esc(c.summary)}</p><small>来源：${esc(c.source)}</small>${c.note ? `<blockquote>我的备注：${esc(c.note)}</blockquote>` : ""}<div class="notebook-card-actions"><button data-file="${esc(c.id)}">查看副本 / 备注</button>${c.url ? `<a href="${esc(c.url)}">来源页面 &gt;&gt;</a>` : ""}<label><input type="checkbox" data-compare="${esc(c.id)}" ${selected.includes(c.id) ? "checked" : ""}> 选入对照</label></div></article>`).join("") : ""}${["all", "note", "starred"].includes(mineFilter) && mineFilter !== "starred" ? notes.map((n) => `<article class="notebook-card personal-note"><span>个人推测</span><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p><div class="notebook-card-actions"><button data-edit-note="${esc(n.id)}">修改笔记</button><button data-delete-note="${esc(n.id)}">移除笔记</button></div></article>`).join("") : ""}${!(mineFilter === "note" ? notes.length : entries.length + (mineFilter === "all" ? notes.length : 0)) ? '<div class="empty"><h3>这个分类还没有材料</h3><p>保存公开登记或阅读站内附件，取得的材料会出现在这里。</p></div>' : ""}</section>`;
     updateChrome();
+    if (animate) motion.enter($("#results"), { items: ".notebook-card" });
   }
   function compare() {
     const files = selected
@@ -529,7 +547,7 @@
     if (b.dataset.nav) {
       e.preventDefault();
       if (b.dataset.nav === "mine") {
-        renderMine();
+        renderMine({ animate: true });
         commitView("#mine");
       } else if (["home", "all"].includes(b.dataset.nav))
         home({ section: b.dataset.nav });
@@ -648,6 +666,11 @@
       }
     }
     if (b.id === "return-home") $("#ending").close();
+    if (b.id === "motion-toggle") {
+      store.update((s) => (s.settings.reduced = !s.settings.reduced));
+      motion.sync();
+      updateChrome();
+    }
     if (b.id === "match-toggle") {
       store.update((s) => (s.settings.assist = !s.settings.assist));
       syncAssist();
@@ -669,6 +692,7 @@
         '<h2>注销并从头开始游戏？</h2><p>本轮的进度、线索、笔记、登记和结局将被清除，员工登录也会退出。确认后回到开场引导。</p><button id="confirm-reset" class="record-action">确认注销并重新开始</button><button id="cancel-choice" class="text-link">取消，继续本轮游戏</button>',
       );
     if (b.id === "confirm-reset") {
+      motion.cancelAll();
       store.reset();
       try {
         sessionStorage.removeItem("harrow-session");
@@ -914,7 +938,7 @@
   function navigateToHash(hash) {
     if ($("#modal").open) $("#modal").close();
     if (hash === "#mine") {
-      renderMine();
+      renderMine({ animate: true });
       $("#results-title").scrollIntoView?.({ block: "start" });
       return;
     }

@@ -1,0 +1,166 @@
+/* 旧网站的短促操作反馈：无循环漂浮，不改变排版和命中区域。 */
+:root {
+  --arg-ease: cubic-bezier(0.22, 0.7, 0.22, 1);
+  --arg-fast: 140ms;
+  --arg-paper: 210ms;
+}
+[data-motion="full"] button,
+[data-motion="full"] .site-nav a,
+[data-motion="full"] .notebook-card,
+[data-motion="full"] .image-link {
+  transition:
+    background-color var(--arg-fast),
+    border-color var(--arg-fast),
+    color var(--arg-fast),
+    box-shadow var(--arg-fast);
+}
+[data-motion="full"] .nav,
+[data-motion="full"] .site-nav a {
+  position: relative;
+}
+[data-motion="full"] .nav.active:after,
+[data-motion="full"] .site-nav [aria-current="page"]:after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 2px;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.38;
+  transform-origin: left;
+  animation: arg-tab-in 180ms var(--arg-ease);
+  pointer-events: none;
+}
+[data-motion="full"] #modal[open] {
+  animation: none;
+}
+[data-motion="full"] #modal[open]::backdrop {
+  animation: arg-backdrop 150ms ease-out;
+}
+[data-motion="full"] #intro[open],
+[data-motion="full"] #restart-dialog[open] {
+  animation: arg-paper-in 190ms var(--arg-ease);
+}
+[data-motion="full"] .toast {
+  animation: arg-toast-in 180ms var(--arg-ease);
+}
+[data-motion="full"] #ending[open] {
+  animation: arg-fade-in 240ms ease-out;
+}
+[data-motion="full"] #ending-reveal {
+  animation: arg-paper-in 280ms var(--arg-ease);
+}
+[data-motion="full"] .transfer-indicator > span {
+  animation-duration: 480ms;
+}
+[data-motion="full"] details[open] > :not(summary) {
+  animation: arg-detail-in 140ms ease-out;
+}
+[data-motion="full"] .image-link img {
+  backface-visibility: hidden;
+}
+[data-motion="full"] .event-controls button:active {
+  transform: translateY(1px);
+}
+#timeline-events li.is-dragging {
+  opacity: 0.45;
+}
+#timeline-events li.is-drop-target {
+  border-color: #8da87b;
+  background: #eaf0df;
+  box-shadow: inset 0 0 0 1px #a2b992;
+}
+#motion-toggle {
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: normal;
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-motion="full"] .item:hover .item-image {
+    box-shadow: inset 0 0 0 1px #bfd0dc;
+  }
+  [data-motion="full"] .notebook-card:hover {
+    border-color: #abbf9e;
+    box-shadow: 2px 3px 0 #e2ead8;
+  }
+  [data-motion="full"] .site .entry-list article:hover {
+    box-shadow: inset 2px 0 0 #b8c9a8;
+  }
+  [data-motion="full"] .image-tools button:hover {
+    border-color: #8fa77e;
+    background: #e8efdc;
+  }
+}
+[data-motion="reduced"] *,
+[data-motion="reduced"] *:before,
+[data-motion="reduced"] *:after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+@keyframes arg-paper-in {
+  from {
+    opacity: 0.7;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes arg-detail-in {
+  from {
+    opacity: 0.7;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes arg-tab-in {
+  from {
+    transform: scaleX(0.35);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes arg-backdrop {
+  from {
+    opacity: 0.75;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes arg-fade-in {
+  from {
+    opacity: 0.65;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes arg-toast-in {
+  from {
+    opacity: 0.6;
+    translate: 0 5px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
