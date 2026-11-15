@@ -2085,3 +2085,102 @@ body > .utility {
     font-size: 10px;
   }
 }
+/* 阅读时保留目标标题和主入口，说明可折叠；两条调查线各有可操作入口。 */
+.journey-caption > [data-guide-toggle] {
+  font:
+    11px/1.6 Tahoma,
+    "SimSun",
+    serif;
+  border: 0;
+  padding: 0 0 3px;
+  color: #8196a4;
+  background: transparent;
+  box-shadow: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.journey-guide.is-compact {
+  padding-block: 12px;
+}
+.journey-guide.is-compact .journey-content {
+  align-items: center;
+}
+.journey-guide.is-compact .journey-content h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.journey-guide.is-compact .journey-content p,
+.journey-guide.is-compact .journey-tasks,
+.journey-guide.is-compact .journey-path {
+  display: none;
+}
+.journey-tasks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+.journey-tasks li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  gap: 5px 7px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #d6dfe4;
+  background: #ffffff60;
+  align-items: baseline;
+  min-width: 0;
+}
+.journey-tasks li > span:nth-child(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.journey-tasks small {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.journey-task-link {
+  grid-column: 2/-1;
+  justify-self: start;
+  font-size: 11px;
+  line-height: 1.8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding-block: 3px;
+  overflow-wrap: anywhere;
+}
+.site .journey-caption > [data-guide-toggle] {
+  color: #8a997a;
+  background: transparent;
+  box-shadow: none;
+}
+.site .journey-tasks li {
+  border-color: #d1dac5;
+  background: #f7f8ef;
+}
+.site .journey-task-link {
+  color: #758969;
+}
+@media (max-width: 960px) {
+  .journey-tasks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .journey-guide.is-compact .journey-content {
+    gap: 9px;
+  }
+  .journey-guide.is-compact .journey-actions {
+    gap: 7px 12px;
+  }
+  .journey-caption > [data-guide-toggle] {
+    min-height: 28px;
+  }
+  .journey-tasks li {
+    padding: 10px;
+  }
+  .journey-task-link {
+    min-height: 32px;
+  }
+}

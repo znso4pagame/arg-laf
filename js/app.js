@@ -24,6 +24,7 @@
     itemCategory = "all",
     currentNav = "home",
     pendingChoice = null,
+    claimDraft = "",
     toastTimer;
   const has = (id) => store.read().clues.some((c) => c.id === id);
   const label = {
@@ -354,11 +355,14 @@
       panel.id = "application-panel";
       $(".content-grid").after(panel);
     }
+    claimDraft = s.ending
+      ? ""
+      : (panel.querySelector("[name=name]")?.value ?? claimDraft);
     panel.hidden =
       !s.flags.includes("staff") ||
       !(has("anomaly") || has("clause") || s.flags.includes("verified")) ||
       !!s.ending;
-    panel.innerHTML = `<h2>特殊人员认领申请</h2><p>员工站附件关联到客服 0001 的人员认领。这不是你失物的领取单。${s.flags.includes("verified") ? "你已经完成归档关系核验。" : "资料尚未全部核对，可以继续调查后再决定。"}</p><a href="danny.html#archive">回归档室核对材料 &gt;&gt;</a><form id="claim-form" class="claim-form"><label>认领对象<input value="小鹿 / 客服 0001" readonly></label><label>认领人姓名<input name="name" required maxlength="30" autocomplete="off"></label><label class="claim-terms">认领人承担该对象在系统中遗留的全部责任、义务与岗位职责。提交前将再次核对。</label><button class="record-action" type="submit">核对并准备签署</button><button class="text-link" type="button" id="leave">放弃本次认领</button></form>`;
+    panel.innerHTML = `<h2>特殊人员认领申请</h2><p>员工站附件关联到客服 0001 的人员认领。这不是你失物的领取单。${s.flags.includes("verified") ? "你已经完成归档关系核验。" : "资料尚未全部核对，可以继续调查后再决定。"}</p><a href="danny.html#archive">回归档室核对材料 &gt;&gt;</a><form id="claim-form" class="claim-form"><label>认领对象<input value="小鹿 / 客服 0001" readonly></label><label>认领人姓名<input name="name" value="${esc(claimDraft)}" required maxlength="30" autocomplete="off"></label><label class="claim-terms">认领人承担该对象在系统中遗留的全部责任、义务与岗位职责。提交前将再次核对。</label><button class="record-action" type="submit">核对并准备签署</button><button class="text-link" type="button" id="leave">放弃本次认领</button></form>`;
   }
   function renderMine() {
     document.body.classList.add("notebook-mode");
@@ -632,6 +636,8 @@
       selected = [];
       mineQuery = "";
       deletedNotes = [];
+      claimDraft = "";
+      $("#application-panel")?.remove();
       $("#modal").close();
       home();
       $("#intro").showModal();

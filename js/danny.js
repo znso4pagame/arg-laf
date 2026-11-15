@@ -67,7 +67,9 @@
       pair = store.read().danny.pair.slice(),
       transitionTimer = null,
       composing = false,
-      lastReadKey = "";
+      lastReadKey = "",
+      returnAfterLogin = null,
+      observedProgress = "";
     const status = (text) => ($("#site-status").textContent = text);
     const canRead = (key) => {
       const f = files[key];
@@ -86,8 +88,22 @@
       Object.entries(files)
         .filter(([key]) => canRead(key) && key !== "door-back")
         .map(([key, f]) => ({ ...f, key }));
-    function chrome() {
+    function progressSignature() {
+      return staff()
+        ? ["cabinet", "compared", "timeline", "verified"].map(flag).join("|")
+        : "guest";
+    }
+    function refreshReadMarkers() {
+      d.querySelectorAll(".entry-list [data-read]").forEach((b) => {
+        const seen = has(files[b.dataset.read].id),
+          row = b.closest("article");
+        row.classList.toggle("is-read", seen);
+        row.querySelector(".read-marker").hidden = !seen;
+      });
+    }
+    function chrome({ reading = false } = {}) {
       const logged = staff();
+      observedProgress = progressSignature();
       let guide = $("#journey-guide");
       if (!guide) {
         guide = d.createElement("section");
@@ -99,6 +115,7 @@
       w.ZHAOHUI_GUIDE.render(guide, store.read(), {
         page: "danny",
         staffSession: logged,
+        reading,
       });
       $("#permission-label").textContent = logged
         ? "员工模式 / Danny"
@@ -161,6 +178,7 @@
       w.ZHAOHUI_GUIDE.render($("#journey-guide"), store.read(), {
         page: "danny",
         staffSession: staff(),
+        reading: true,
       });
       status("已保存：" + f.title);
       if (focus) {
@@ -209,7 +227,28 @@
           "",
         )}</fieldset><button>保存字段核对</button></form><p id="difference-status" role="status"></p>${flag("compared") ? '<button data-read="clause">查阅移交附则</button>' : ""}</section><section class="chain-box"><h3>附页关系登记</h3><p>签收凭据和后续登记之间有一处相同的人员标识。按原字段填写，不必写整句推测。</p><form id="chain-form"><label>签收凭据中的签收人<input name="signer" required maxlength="80" autocomplete="off"></label><label>后续登记中的物品名称<input name="subject" required maxlength="80" autocomplete="off"></label><label>特殊认领移交的事项<input name="inheritance" required maxlength="80" autocomplete="off"></label><button>核对关联</button></form><p id="chain-status" role="status"></p><div id="truth-result" ${flag("verified") ? "" : "hidden"}>${flag("verified") ? body(files.truth) + '<a href="index.html#application">返回找回网 / 待决定的申请</a>' : ""}</div></section>${reader()}`;
     }
-    function route(target) {
+    function toolElement(code) {
+      const selectors = {
+        catalog: ".entry-list",
+        account: "#login-form",
+        timeline: ".timeline-tool",
+        cabinet: ".cabinet-box",
+        compare: ".comparison-tool",
+        relation: ".chain-box",
+        reader: "#reading-pane",
+      };
+      return selectors[code] ? $(selectors[code]) : null;
+    }
+    function focusTool(code) {
+      const target = toolElement(code) || $("#site-main");
+      if (target) {
+        if (!target.matches("input,button,a,select,textarea"))
+          target.setAttribute("tabindex", "-1");
+        target.focus({ preventScroll: true });
+        target.scrollIntoView?.({ block: "start" });
+      }
+    }
+    function route(target, { focusEntry = true } = {}) {
       const [tab, entryId] = String(target).split("--");
       active = [
         "journal",
@@ -255,15 +294,28 @@
         renderPair();
         transition();
       }
-      if (entryId) {
+      if (
+        entryId &&
+        /^tool-(timeline|cabinet|compare|relation)$/.test(entryId)
+      ) {
+        if (!staff()) returnAfterLogin = active + "--" + entryId;
+        if (focusEntry) focusTool(entryId.slice(5));
+      } else if (entryId) {
         const key = Object.keys(files).find((key) => files[key].id === entryId);
-        if (key) read(key, { remember: false, focus: false });
+        if (key && !canRead(key) && !staff() && files[key].access !== "guest")
+          returnAfterLogin = active + "--" + entryId;
+        if (key) read(key, { remember: false, focus: focusEntry });
       }
     }
     function go(tab) {
-      if (w.location.hash !== "#" + tab)
-        w.history.pushState(null, "", "#" + tab);
-      route(tab);
+      if (w.location.hash === "#" + tab) return;
+      const [section, entry] = tab.split("--");
+      const localTool =
+        section === active &&
+        entry?.startsWith("tool-") &&
+        toolElement(entry.slice(5));
+      w.history.pushState(null, "", "#" + tab);
+      if (!localTool) route(tab);
     }
     function renderPair() {
       for (let i = 0; i < 2; i++) {
@@ -297,6 +349,14 @@
     d.addEventListener("click", (e) => {
       const b = e.target.closest("button,a");
       if (!b) return;
+      const local =
+        b.tagName === "A" &&
+        /^danny\.html#([a-z0-9-]+)$/.exec(b.getAttribute("href") || "");
+      if (local && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        go(local[1]);
+        focusTool(b.dataset.guideFocus);
+      }
       if (b.dataset.tab) {
         e.preventDefault();
         go(b.dataset.tab);
@@ -421,8 +481,12 @@
         f.elements.password.value = "";
         store.mark("staff");
         store.collect({ ...files.staff, url: "danny.html#work" });
-        go("work");
-        status("员工会话已建立。工作匣现可查阅。");
+        let destination = returnAfterLogin || "work";
+        returnAfterLogin = null;
+        if (destination.startsWith("archive") && !flag("cabinet"))
+          destination = "work";
+        go(destination);
+        status("员工会话已建立，已回到可查阅的位置。");
       }
       if (f.id === "cabinet-form") {
         e.preventDefault();
@@ -502,7 +566,14 @@
             w.sessionStorage.removeItem("harrow-session");
           } catch {}
         }
-        route(w.location.hash.slice(1) || active);
+        if (progressSignature() !== observedProgress)
+          route(w.location.hash.slice(1) || active, { focusEntry: false });
+        else {
+          chrome({
+            reading: !!$("#reading-pane") && !$("#reading-pane").hidden,
+          });
+          refreshReadMarkers();
+        }
       }
     });
     $("#site-search").value = store.read().danny.query;

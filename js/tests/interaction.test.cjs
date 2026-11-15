@@ -876,3 +876,176 @@ test("当前目标的站内跳转立即生效，材料副本可以直接回到�
   assert.equal(a.$("#application-panel").hidden, false);
   assert.equal(a.w.location.hash, "#application");
 });
+
+test("两条调查线可各自直接进入工具，同一栏目内跳转保留正在填写的柜号", (t) => {
+  const a = login(t, memory(), memory());
+  a.set("[name=code]", "5013");
+  const original = a.$("#cabinet-form");
+  a.click(".journey-tasks a[data-guide-focus=cabinet]");
+  assert.equal(a.d.activeElement, a.$(".cabinet-box"));
+  assert.equal(a.$("#cabinet-form"), original);
+  assert.equal(a.$("[name=code]").value, "5013");
+  a.click(".journey-tasks a[data-guide-focus=timeline]");
+  assert.equal(a.d.activeElement, a.$(".timeline-tool"));
+  assert.equal(a.$("[name=code]").value, "5013");
+});
+test("恢复会话但尚未阅读时，继续入口直接打开正文而非重新排序", (t) => {
+  const local = memory(),
+    session = memory();
+  login(t, local, session);
+  makeStore(local).mark("timeline");
+  const a = boot(t, "danny", local, session, "#work");
+  assert.equal(
+    a.$(".journey-actions>a").getAttribute("href"),
+    "danny.html#work--conversation",
+  );
+  a.click(".journey-actions>a");
+  assert.match(a.$("#reading-pane").textContent, /修复的查询会话/);
+  assert.equal(a.$(".journey-tasks small").textContent, "已核对");
+  assert.equal(a.$(".journey-actions>a").dataset.guideFocus, "cabinet");
+});
+test("游客取得必要的公开材料后目标转向登录，无关登记不冒充来源进度", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.collect({
+    id: "public-0813",
+    title: "校园卡",
+    fields: [["地点", "大学路 · 站台"]],
+    url: "index.html#search",
+  });
+  const guide = require("../journey-guide.js");
+  assert.equal(guide.describe(store.read()).index, 0);
+  for (const key of ["trace", "roster", "it-note", "rain", "door-back"])
+    store.collect(data.files[key]);
+  const a = boot(t, "danny", local);
+  assert.equal(
+    a.$(".journey-actions>a").getAttribute("href"),
+    "danny.html#account",
+  );
+  a.click(".journey-actions>a");
+  assert.ok(a.$("#login-form"));
+  assert.equal(a.d.activeElement, a.$("#login-form"));
+  assert.ok(!a.state().flags.includes("staff"));
+});
+test("完成核验的玩家在游客会话下仍能回主站决定，不被要求重复登录", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.mark("verified");
+  const a = boot(t, "danny", local, memory(), "#work");
+  assert.equal(
+    a.$(".journey-actions>a").getAttribute("href"),
+    "index.html#application",
+  );
+  assert.match(a.$("#journey-guide").textContent, /作最后决定/);
+  assert.equal(a.$("[data-read=night]"), null);
+});
+test("从私有材料深链接进入，游客登录后返回请求的原文", (t) => {
+  const local = memory(),
+    session = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.plan);
+  const a = boot(t, "danny", local, session, "#work--plan");
+  assert.equal(a.$("#reading-pane"), null);
+  a.click(".journey-actions>a");
+  a.set("[name=account]", "danny.late");
+  a.set("[name=password]", "west1103");
+  a.submit("#login-form");
+  assert.equal(a.w.location.hash, "#work--plan");
+  assert.equal(a.$("#reading-pane").hidden, false);
+  assert.match(a.$("#reading-pane").textContent, /3 号厅楼层图/);
+});
+test("目标说明阅读时自动收紧，手动展开与查阅脉络在换材料后保留", (t) => {
+  const a = boot(t, "danny");
+  a.click("[data-read=rain]");
+  assert.ok(a.$("#journey-guide").classList.contains("is-compact"));
+  a.click("[data-guide-toggle]");
+  assert.ok(!a.$("#journey-guide").classList.contains("is-compact"));
+  assert.equal(
+    a.$("[data-guide-toggle]").getAttribute("aria-expanded"),
+    "true",
+  );
+  a.$(".journey-path").open = true;
+  a.click("[data-read=tea]");
+  assert.ok(!a.$("#journey-guide").classList.contains("is-compact"));
+  assert.equal(a.$(".journey-path").open, true);
+});
+test("其他窗口保存笔记不清空登录输入，口令不进入存档", (t) => {
+  const local = memory(),
+    a = boot(t, "danny", local, memory(), "#account");
+  a.set("[name=account]", "danny.late");
+  a.set("[name=password]", "正在输入的口令");
+  const form = a.$("#login-form");
+  makeStore(local).addNote("其他窗口", "新备注");
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#login-form"), form);
+  assert.equal(a.$("[name=password]").value, "正在输入的口令");
+  assert.ok(!JSON.stringify([...local.map]).includes("正在输入的口令"));
+});
+test("跨窗口进度刷新保留未提交姓名，清空输入和重新开始均清除草稿", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.mark("verified");
+  const a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.set("#claim-form [name=name]", "尚未提交的名字");
+  store.addNote("其他窗口", "新材料");
+  a.w.dispatchEvent(new a.w.StorageEvent("storage", { key: store.key }));
+  assert.equal(a.$("#claim-form [name=name]").value, "尚未提交的名字");
+  assert.equal(a.state().name, "");
+  a.set("#claim-form [name=name]", "");
+  a.w.dispatchEvent(new a.w.StorageEvent("storage", { key: store.key }));
+  assert.equal(a.$("#claim-form [name=name]").value, "");
+  a.set("#claim-form [name=name]", "应当被清除");
+  a.click("#reset");
+  a.click("#confirm-reset");
+  assert.equal(a.$("#claim-form [name=name]").value, "");
+});
+
+test("跨窗口重新开始仍会立即撤回当前私有阅读权限", (t) => {
+  const local = memory(),
+    session = memory(),
+    a = login(t, local, session);
+  a.click("[data-read=night]");
+  assert.ok(a.$("#reading-pane"));
+  makeStore(local).reset();
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#reading-pane"), null);
+  assert.equal(a.$("[data-read=night]"), null);
+  assert.equal(session.getItem("harrow-session"), null);
+  assert.match(a.$("#site-main").textContent, /没有开放给游客/);
+});
+
+test("从主站打开继续入口会定位到 Danny 的指定工具而不只是栏目顶部", (t) => {
+  const local = memory(),
+    session = memory();
+  login(t, local, session);
+  const main = boot(t, "index", local, session);
+  const href = main
+    .$(".journey-tasks a[data-guide-focus=cabinet]")
+    .getAttribute("href");
+  assert.equal(href, "danny.html#work--tool-cabinet");
+  const site = boot(t, "danny", local, session, href.slice(href.indexOf("#")));
+  assert.equal(site.d.activeElement, site.$(".cabinet-box"));
+  assert.ok(!site.state().flags.includes("cabinet"));
+});
+test("材料深链接与工具深链接在登录恢复后都定位到请求的位置", (t) => {
+  const local = memory(),
+    session = memory();
+  makeStore(local).mark("staff");
+  const a = boot(t, "danny", local, session, "#work--tool-timeline");
+  a.click(".journey-actions>a");
+  a.set("[name=account]", "danny.late");
+  a.set("[name=password]", "west1103");
+  a.submit("#login-form");
+  assert.equal(a.w.location.hash, "#work--tool-timeline");
+  assert.equal(a.d.activeElement, a.$(".timeline-tool"));
+  const b = boot(t, "danny", local, session, "#work--plan");
+  assert.equal(b.d.activeElement, b.$("#reading-pane"));
+});
