@@ -58,7 +58,13 @@ npm test
 
 测试在本地 DOM 和虚拟时钟中运行，不启动浏览器、不访问网络，覆盖请求取消、输入法、剧情门槛、主线和支线、草稿、普通认领、两种结局、跨页恢复、跨标签同步、存储异常及减少动态效果。测试不等同于浏览器中的视觉检查。
 
-每完成一批可用修改，检查通过后提交并推送到 [GitHub 仓库](https://github.com/znso4pagame/arg-laf)。站点本身仍为静态文件；推送代码不会自动开启公开托管。
+每完成一批可用修改，检查通过后提交并推送到 [GitHub 仓库](https://github.com/znso4pagame/arg-laf)。
+
+## GitHub Pages
+
+`.github/workflows/pages.yml` 在推送到 `main` 后运行交互测试，通过后部署静态网站。需要先在仓库设置中启用 GitHub Pages，构建来源选择 GitHub Actions，并确保账户套餐支持此仓库的 Pages 服务。
+
+部署内容仅包括页面、样式和运行脚本，不包含原始剧情文档、测试文件或开发依赖。使用 GitHub Pages 的项目子路径时，根入口和所有资源均通过相对路径访问。
 
 ## 开发者路线（含剧透）
 
