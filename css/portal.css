@@ -60,6 +60,13 @@ main.wrap { background:#fff; padding:12px; border:1px solid #aac3d9; border-top:
 .suggestions button>span:last-child { color:#7293ab; }
 .suggestions button .suggestion-word { color:#294c66; }
 .suggestions button:hover,.suggestions button:focus-visible { background:#e8f1f9; box-shadow:inset 2px 0 #3578ac; }
+.suggestion-response { padding:8px 12px; min-height:36px; color:#294c66; border-bottom:1px dotted #dce7ef; font-size:12px; line-height:1.7; cursor:text; animation:suggestion-arrive 220ms ease-out both; }
+.resume-reply { display:block; margin:9px 12px; padding:7px 10px; border:1px solid #c9d9e5; background:#f3f8fc; color:#386b91; font-size:11px; text-align:left; max-width:calc(100% - 24px); overflow-wrap:anywhere; }
+.resume-reply:hover { background:#e6f0f8; }
+.query-navigation { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 10px; border:1px solid #c8d9e6; border-top:0; background:#f4f8fb; color:#738d9f; font-size:11px; }
+.query-navigation button { color:#286a9d; font-size:11px; padding:4px 0; }
+.query-navigation button:disabled { cursor:default; opacity:.4; }
+#ask-property { padding:0 2px; color:#22669b; font-size:11px; text-decoration:underline; text-underline-offset:3px; }
 .search-tools { margin:0 12px 10px; }
 .search-tools:has(>:not([hidden])) { margin-top:10px; padding-top:7px; border-color:#dbe5ed; }
 .search-tools summary,#return-claim { font-size:11px; color:#346c96; }

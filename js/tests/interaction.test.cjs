@@ -138,21 +138,21 @@ test('Danny 是独立访客；拒签不会又被写成完成了岗位移交',t=>
 test('从失物暂存到特殊人员申请有明确核验与对象变更',t=>{
   const a=boot(t);a.route();a.search('我的东西');
   assert.match(a.$('#results').textContent,/客服人工补录，尚未核验/);assert.match(a.$('#results').textContent,/钱包/);
-  a.search('审核');assert.match(a.$('#results').textContent,/不能用于领取你的失物/);
+  a.search('审核');assert.match(a.$('#results').textContent,/两项申请没有自动关联/);
   a.search('认领表');assert.match(a.$('#results').textContent,/不是你遗失的物品/);
   assert.equal(a.$('#claim-form input[readonly]').value,'客服 0001');assert.equal(a.state().waiting,false);
   a.search('免责条款');assert.match(a.$('#results').textContent,/生效条件/);
   a.search('岗位职责');assert.match(a.$('#results').textContent,/接替客服岗位/);assert.equal(a.state().waiting,true);
 });
 
-test('看表不等于放弃：刷新与站内查说明都保留进度',t=>{
+test('普通导航都保留进度，不会猜测玩家是否决定放弃',t=>{
   const a=boot(t);a.route();a.input('[name="claimant"]','测试玩家');a.input('[name="reason"]','核对后决定');
   const b=boot(t,{saved:a.state(),navType:'reload'});assert.equal(b.state()?.ending||'','');
   b.search('认领表');assert.equal(b.$('[name="claimant"]').value,'测试玩家');
   b.search('岗位职责');const armed=b.state();
   const c=boot(t,{saved:armed,navType:'reload'});assert.equal(c.$('#staff-count').textContent,'本站员工：1');
   const d=boot(t,{saved:armed,navType:'navigate',guideReturn:true});assert.equal(d.$('#staff-count').textContent,'本站员工：1');
-  const e=boot(t,{saved:armed,navType:'navigate'});assert.equal(e.$('#staff-count').textContent,'本站员工：0');
+  const e=boot(t,{saved:armed,navType:'navigate'});assert.equal(e.$('#staff-count').textContent,'本站员工：1');
 });
 
 test('表格草稿与返回入口独立于“已摊牌”状态',t=>{
@@ -162,7 +162,7 @@ test('表格草稿与返回入口独立于“已摊牌”状态',t=>{
   a.click('.brand');a.click('#return-claim');a.tick();assert.equal(a.$('[name="claimant"]').value,'测试玩家');
 });
 
-test('浏览器前进后退恢复只在摊牌并真正离开后归档',t=>{
+test('浏览器前进后退恢复保持待决定状态',t=>{
   const a=boot(t);a.route();
   a.w.dispatchEvent(new a.w.PageTransitionEvent('pagehide',{persisted:true}));
   a.w.dispatchEvent(new a.w.PageTransitionEvent('pageshow',{persisted:true}));
@@ -172,7 +172,7 @@ test('浏览器前进后退恢复只在摊牌并真正离开后归档',t=>{
   assert.equal(a.$('#staff-count').textContent,'本站员工：1');
   a.w.dispatchEvent(new a.w.PageTransitionEvent('pagehide',{persisted:true}));
   a.w.dispatchEvent(new a.w.PageTransitionEvent('pageshow',{persisted:true}));
-  assert.equal(a.$('#staff-count').textContent,'本站员工：0');
+  assert.equal(a.$('#staff-count').textContent,'本站员工：1');
 });
 
 test('最终沉默不再说话，已开放记录与最终选择仍可访问',t=>{
@@ -186,6 +186,7 @@ test('认领防止空白和重复提交；转场结束后姓名按文本显示',
   const a=boot(t);a.route();a.input('[name="claimant"]','  ');a.input('[name="reason"]','测试');a.submit('#claim-form');
   assert.equal(a.$('#claim-error').hidden,false);assert.equal(a.state().ending,'');
   a.input('[name="claimant"]','玩家 <img src=x>');a.submit('#claim-form');a.submit('#claim-form');
+  assert.equal(a.state().ending,'');assert.ok(a.$('#confirm-claim'));a.click('#confirm-claim');
   assert.equal(a.state().ending,'claimed');assert.equal(a.$('#ending').open,true);assert.equal(a.$('#ending-reveal').hidden,true);
   a.tick(900);assert.match(a.$('#ending-status').textContent,/移交岗位/);a.tick(1500);assert.equal(a.$('#ending-reveal').hidden,false);
   a.click('#return-home');assert.equal(a.$('#ending').open,false);assert.equal(a.$('#results img'),null);
@@ -193,7 +194,7 @@ test('认领防止空白和重复提交；转场结束后姓名按文本显示',
 });
 
 test('显式放弃可在知晓真相之前选择，且终局不再返回异常',t=>{
-  const a=boot(t);a.route();a.click('#leave');assert.equal(a.$('#staff-count').textContent,'本站员工：0');
+  const a=boot(t);a.route();a.click('#leave');assert.equal(a.state().ending,'');a.click('#confirm-leave');assert.equal(a.$('#staff-count').textContent,'本站员工：0');
   a.search('钱包');assert.equal(a.$('.anomaly'),null);a.search('小鹿');assert.match(a.$('#results').textContent,/没有找到/);
 });
 
@@ -244,7 +245,7 @@ test('输入法组合输入、方向键和 Escape 不误触剧情',t=>{
 test('旧版存档迁移不清除数据，也不因旧的 waiting 标志误结局',t=>{
   const a=boot(t,{saved:{seen:['认领表'],waiting:true,level:3,original:'钥匙',draft:{name:'旧玩家',reason:'保留'}}});
   assert.equal(a.$('#staff-count').textContent,'本站员工：1');a.search('认领表');
-  assert.equal(a.$('[name="claimant"]').value,'旧玩家');assert.equal(a.state().schema,2);assert.equal(a.state().waiting,false);
+  assert.equal(a.$('[name="claimant"]').value,'旧玩家');assert.equal(a.state().schema,4);assert.equal(a.state().waiting,false);
   assert.ok(a.state().seen.includes('审核'));assert.equal(a.state().original,'钥匙');
 });
 
@@ -266,7 +267,142 @@ test('开场可以开始实际查询、略过与恢复；不泄露反转',t=>{
 test('存储受限、坏存档和减少动效设置均可继续',t=>{
   const a=boot(t,{storageBlocked:true});a.search('钱包');assert.ok(a.$('.anomaly'));
   const b=boot(t,{saved:'{broken'});assert.equal(b.d.querySelectorAll('.item').length,4);
-  const c=boot(t,{reduced:true});c.route();c.input('[name="claimant"]','测试');c.input('[name="reason"]','测试理由');c.submit('#claim-form');c.tick(0);assert.equal(c.$('#ending-reveal').hidden,false);
+  const c=boot(t,{reduced:true});c.route();c.input('[name="claimant"]','测试');c.input('[name="reason"]','测试理由');c.submit('#claim-form');c.click('#confirm-claim');c.tick(0);assert.equal(c.$('#ending-reveal').hidden,false);
+});
+
+test('玩家可先追问失物，再自行选择调查档案或查看申请',t=>{
+  const a=boot(t);a.search('我的钱包在哪');assert.equal(a.state().original,'钱包');assert.ok(a.$('.anomaly'));
+  a.search('你是谁');assert.equal(a.$('#ask-property').hidden,false);a.click('#ask-property');a.tick();
+  assert.match(a.$('#results').textContent,/失物查询委托/);assert.equal(a.state().facts.includes('temporary-record'),false);
+  a.search('审核');assert.equal(a.state().seen.includes('审核'),false);
+  a.search('你在哪');assert.equal(a.$('#field-guide').hidden,false);a.search('b 3');
+  a.search('我的钱包呢');assert.match(a.$('#results').textContent,/临时补录/);
+  a.search('审核');assert.match(a.$('#suggestions').textContent,/我现在碰不到实物架/);
+  assert.equal(a.state().seen.includes('0002'),false);a.search('认领表');assert.ok(a.$('#claim-form'));
+  a.search('入职记录');a.search('编号0002');a.search('0003');a.search('审核');
+  assert.match(a.$('#suggestions').textContent,/我没有找到你的东西/);
+  assert.equal(a.state().original,'钱包');
+});
+
+test('询问怎么帮忙会按工牌和申请情境回答，而非跳到无关查询',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁');a.search('我该怎么帮你');
+  assert.match(a.$('#suggestions').textContent,/先确认我的工牌/);
+  a.search('你在哪');a.search('B3');a.search('我应该怎么帮你');
+  assert.match(a.$('#suggestions').textContent,/核对之后你再决定/);
+  a.search('我的东西');a.search('审核');a.search('怎么帮你');
+  assert.match(a.$('#suggestions').textContent,/申请的对象是我/);
+});
+
+test('回话是可阅读文本，真正的问题与索引才是可点击项',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁');
+  assert.match(a.$('.suggestion-response').textContent,/我是小鹿/);
+  assert.equal(a.d.querySelectorAll('#suggestions button[data-search="我是小鹿"]').length,0);
+  assert.ok(a.$('#suggestions button[data-search="小鹿"]'));
+  a.click('#suggestions button[data-search="小鹿"]');a.tick();assert.ok(a.state().seen.includes('我是小鹿'));
+});
+
+test('打断一半的回复可以续读，已显示过的句子不会再次发出',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁',false);a.tick(750);
+  assert.equal(a.d.querySelectorAll('.suggestion-response').length,1);
+  assert.match(a.$('.suggestion-response').textContent,/我是小鹿/);
+  a.input('#search','先想一想');a.tick();assert.equal(a.$('#resume-reply').hidden,false);
+  a.click('#resume-reply');a.tick();
+  assert.doesNotMatch(a.$('#suggestions').textContent,/我是小鹿/);
+  assert.match(a.$('#suggestions').textContent,/我只能在这里写字/);
+  assert.equal(a.state().heard['你是谁:base'],2);
+  a.search('你是谁');assert.equal(a.d.querySelectorAll('.suggestion-response').length,0);
+});
+
+test('刷新保留已显示的记录和未读提示，恢复本身不推进剧情',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁',false);a.tick(750);
+  a.w.dispatchEvent(new a.w.PageTransitionEvent('pagehide'));
+  const saved=a.state();const b=boot(t,{saved,navType:'reload'});
+  assert.equal(b.$('#search').value,'你是谁');assert.match(b.$('#suggestions').textContent,/我是小鹿/);
+  assert.equal(b.$('#resume-reply').hidden,false);b.click('#resume-reply');b.tick();
+  assert.match(b.$('#suggestions').textContent,/我只能在这里写字/);
+  assert.deepEqual(b.state().seen,saved.seen);
+  b.search('你在哪');b.search('B3');const before=b.state();
+  const c=boot(t,{saved:before,navType:'navigate'});
+  assert.match(c.$('#results').textContent,/工牌登记/);assert.equal(c.$('#search').value,'B3');
+  assert.equal(c.$('#staff-count').textContent,'本站员工：1');
+});
+
+test('上一条和下一条查询恢复缓存，不重播回应、不改变已知证据',t=>{
+  const a=boot(t);a.route();const before=a.state();
+  a.click('#query-back');assert.equal(a.$('#search').value,'审核');
+  assert.match(a.$('#results').textContent,/审核结果/);
+  a.click('#query-forward');assert.ok(a.$('#claim-form'));
+  assert.deepEqual(a.state().seen,before.seen);assert.deepEqual(a.state().heard,before.heard);
+  a.click('#query-back');a.search('入职记录');assert.equal(a.$('#query-forward').disabled,true);
+});
+
+test('最终回应被打断仍可续读，沉默不会吞掉还未显示的最后几句',t=>{
+  const a=boot(t);a.route();a.search('岗位职责',false);a.tick(400);
+  a.search('为什么');assert.equal(a.$('#resume-reply').hidden,false);
+  a.click('#resume-reply');a.tick();assert.match(a.$('#suggestions').textContent,/你自己选/);
+  assert.equal(a.state().heard['岗位职责:base'],4);
+  a.search('为什么');assert.equal(a.d.querySelectorAll('.suggestion-response').length,0);
+});
+
+test('提交前可返回修改，放弃前可取消，两种操作都不会误入结局',t=>{
+  const a=boot(t);a.route();a.input('[name="claimant"]','测试玩家');a.input('[name="reason"]','先核对');a.submit('#claim-form');
+  assert.equal(a.state().ending,'');assert.match(a.$('#modal-body').textContent,/测试玩家/);
+  a.click('#cancel-review');assert.equal(a.$('[name="claimant"]').value,'测试玩家');
+  a.click('#leave');a.click('#cancel-review');assert.equal(a.state().ending,'');
+  a.w.dispatchEvent(new a.w.PageTransitionEvent('pagehide'));
+  const b=boot(t,{saved:a.state(),navType:'navigate'});assert.ok(b.$('#claim-form'));assert.equal(b.state().ending,'');
+  b.click('#leave');b.click('#confirm-leave');assert.equal(b.$('#staff-count').textContent,'本站员工：0');
+});
+
+test('旧页面离开时不能覆盖另一个页面已经完成的结局或重置',async t=>{
+  const a=boot(t);a.route();const old=a.state();
+  const newer={...old,revision:old.revision+5,ending:'left',waiting:false};
+  a.w.localStorage.setItem(storageKey,JSON.stringify(newer));a.w.dispatchEvent(new a.w.PageTransitionEvent('pagehide'));
+  assert.equal(a.state().ending,'left');assert.equal(a.state().revision,newer.revision);
+  a.input('[name="claimant"]','旧页面');await Promise.resolve();
+  assert.equal(a.$('#staff-count').textContent,'本站员工：0');assert.equal(a.state().ending,'left');
+  const reset={...newer,revision:newer.revision+1,ending:'',original:'',seen:[],views:[],pending:[],heard:{},facts:[],leads:[],screen:'home'};
+  a.w.localStorage.setItem(storageKey,JSON.stringify(reset));a.w.dispatchEvent(new a.w.PageTransitionEvent('pagehide'));
+  assert.equal(a.state().ending,'');assert.equal(a.state().original,'');assert.equal(a.state().revision,reset.revision);
+});
+
+test('提交核对窗口打开后，旧页面也不能覆盖另一页新完成的决定',async t=>{
+  const a=boot(t);a.route();a.input('[name="claimant"]','旧页面');a.input('[name="reason"]','测试');a.submit('#claim-form');
+  const newer={...a.state(),revision:a.state().revision+1,ending:'left',waiting:false};
+  a.w.localStorage.setItem(storageKey,JSON.stringify(newer));a.click('#confirm-claim');await Promise.resolve();
+  assert.equal(a.state().ending,'left');assert.equal(a.$('#ending').open,false);assert.equal(a.$('#staff-count').textContent,'本站员工：0');
+});
+
+test('尚未返回的首次物品搜索不构成发现异常，损坏存档仍能重新保存',t=>{
+  const a=boot(t,{showOpening:true});a.input('#intro-item','围巾');a.submit('#intro-form');
+  a.w.dispatchEvent(new a.w.PageTransitionEvent('pagehide'));const b=boot(t,{saved:a.state()});
+  assert.equal(b.$('#field-guide').dataset.hint,'start');b.search('你是谁');assert.equal(b.state().seen.length,0);
+  const c=boot(t,{saved:'{broken'});c.search('钱包');assert.equal(c.state().anomalySeen,true);
+});
+
+test('只提交地点问题不算看到楼层线索，用户输入不能自己变成证据',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁');a.search('你在哪',false);a.tick(400);
+  assert.equal(a.state().leads.includes('B3'),false);
+  a.search('B3');assert.equal(a.state().seen.includes('B3'),false);assert.equal(a.state().leads.includes('B3'),false);
+  a.click('#resume-reply');a.tick();assert.equal(a.state().leads.includes('B3'),true);
+  a.click('#suggestions button[data-search="B3"]');a.tick();assert.match(a.$('#results').textContent,/工牌登记/);
+});
+
+test('玩家可以直接追问认领代价，不必猜中“岗位职责”这个词',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁');a.search('如果我认领你会怎样');
+  assert.match(a.$('#suggestions').textContent,/先确认我留下的工牌/);assert.equal(a.state().seen.includes('岗位职责'),false);
+  a.search('你在哪');a.search('B3');a.search('我的东西');a.search('审核');a.search('我认领你之后会怎么样');
+  assert.match(a.$('#suggestions').textContent,/完整附则就在申请里/);
+  a.search('认领表');a.search('我认领你之后，我会怎么样？');
+  assert.match(a.$('#results').textContent,/接替客服岗位/);assert.equal(a.state().seen.includes('岗位职责'),true);
+});
+
+test('搜索“不签”或离开相关措辞只是提问，不会替玩家触发放弃',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁');a.search('不签');
+  assert.match(a.$('#suggestions').textContent,/我会等/);assert.equal(a.state().ending,'');
+  a.route();a.search('不填');assert.equal(a.state().ending,'');
+  a.search('我要关了');assert.equal(a.state().ending,'');
+  a.search('认领表');a.click('#leave');assert.equal(a.state().ending,'');a.click('#cancel-review');assert.equal(a.state().ending,'');
 });
 
 test('线上打包包含独立说明页和内容指纹，所有引用都能解析',()=>{

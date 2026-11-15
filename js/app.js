@@ -5,7 +5,7 @@
   const key = 'zhaohui-story-v1';
   const introKey = 'zhaohui-intro-v1';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const fresh = () => ({ schema: 2, anomalySeen: false, lastClue: '', seen: [], level: 0, original: '', ending: '', name: '', waiting: false, history: [], hintLevels: {}, draft: { name: '', reason: '' }, registrations: [], applications: {}, badgeVisits: 0 });
+  const fresh = () => ({ schema: 4, leads: [], revision: 0, heard: {}, pending: [], facts: [], views: [], viewCursor: -1, screen: 'home', anomalySeen: false, lastClue: '', seen: [], level: 0, original: '', ending: '', name: '', waiting: false, history: [], hintLevels: {}, draft: { name: '', reason: '' }, registrations: [], applications: {}, badgeVisits: 0 });
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let storageAvailable = true;
   function readState(raw) {
@@ -18,9 +18,10 @@
       next.ending = ['left', 'claimed'].includes(saved.ending) ? saved.ending : '';
       next.name = typeof saved.name === 'string' ? saved.name.slice(0, 30) : '';
       next.original = typeof saved.original === 'string' ? saved.original.slice(0, 80) : '';
-      next.anomalySeen = saved.anomalySeen === true || !!saved.original || next.seen.length > 0;
+      next.anomalySeen = saved.anomalySeen === true || ((!saved.schema || saved.schema < 3) && (!!saved.original || next.seen.length > 0));
+      next.revision = Math.max(0, Number(saved.revision) || 0);
       // 旧版只按层级放行；迁移已读证据的前置关系，保留旧进度与结局。
-      if (saved.schema !== 2) {
+      if (![2,3,4].includes(saved.schema)) {
         const addParents = term => {
           const clue = data.clues[term]; if (!clue) return;
           for (const parent of [...(clue.after || []), ...(clue.any?.length ? [clue.any[0]] : [])]) {
@@ -41,7 +42,23 @@
       next.draft = { name: String(saved.draft?.name || '').slice(0, 30), reason: String(saved.draft?.reason || '').slice(0, 300) };
       next.registrations = Array.isArray(saved.registrations) ? saved.registrations.filter(x => x && typeof x.id === 'string' && x.id.startsWith('L') && ['name','place','description','type','date'].every(k => typeof x[k] === 'string')).slice(0, 50) : [];
       if (saved.applications && typeof saved.applications === 'object') for (const [id, value] of Object.entries(saved.applications)) { if (value && typeof value.receipt === 'string') next.applications[id] = { receipt: value.receipt.slice(0,80) }; }
-      next.badgeVisits = Math.max(0, Number(saved.badgeVisits) || 0);
+      next.facts = Array.isArray(saved.facts) ? saved.facts.filter(x => x === 'temporary-record') : [];
+      if ((!saved.schema || saved.schema < 3) && next.seen.includes('我的东西') && next.seen.includes('B3')) next.facts = ['temporary-record'];
+      if (saved.heard && typeof saved.heard === 'object') for (const [id,count] of Object.entries(saved.heard)) {
+        if (Object.keys(data.clues).some(term => id.startsWith(term + ':')) && Number.isInteger(count) && count >= 0 && count <= 20) next.heard[id] = count;
+      }
+      if (!saved.schema || saved.schema < 3) for (const term of next.seen) next.heard[term + ':base'] = data.clues[term].words.length;
+      if (Array.isArray(saved.pending)) next.pending = saved.pending.filter(x => x && typeof x.term === 'string' && Object.hasOwn(data.clues,x.term) && typeof x.variant === 'string' && typeof x.query === 'string').slice(-12).map(x => ({ term:x.term, variant:x.variant.slice(0,30), query:x.query.slice(0,80) }));
+      if (Array.isArray(saved.views)) next.views = saved.views.filter(x => x && typeof x.query === 'string' && ['clue','normal','empty','blocked','home'].includes(x.kind) && (!x.term || Object.hasOwn(data.clues,x.term))).slice(-24).map(x => ({ query:x.query.slice(0,80), term:x.term || '', kind:x.kind, variant:String(x.variant || 'base').slice(0,30), lookup:typeof x.lookup==='string'?x.lookup.slice(0,80):x.query.slice(0,80), anomalous:!!x.anomalous, words:Array.isArray(x.words) ? x.words.filter(w => w && typeof w.text === 'string').slice(0,20).map(w=>({text:w.text.slice(0,120),reply:!!w.reply})) : [] }));
+      next.viewCursor = next.views.length ? Math.min(next.views.length-1,Math.max(0,Number(saved.viewCursor) || 0)) : -1;
+      next.screen = ['home','all','query'].includes(saved.screen) ? saved.screen : 'home';
+      next.leads = Array.isArray(saved.leads) ? saved.leads.filter(term=>typeof term==='string'&&Object.hasOwn(data.clues,term)) : [];
+      if(saved.schema!==4) {
+        const add = word => {const term=data.aliases[word]||word;if(Object.hasOwn(data.clues,term)&&!next.leads.includes(term))next.leads.push(term);};
+        next.seen.forEach(add);next.views.forEach(view=>view.words.forEach(entry=>add(entry.text)));
+        for(const term of next.seen)if(data.clues[term].page)for(const query of data.clues[term].queries||[])add(query);
+      }
+
       return next;
     } catch { return fresh(); }
   }
@@ -49,19 +66,26 @@
   try { state = readState(localStorage.getItem(key)); } catch { storageAvailable = false; state = fresh(); }
   let introSeen = false;
   try { introSeen = localStorage.getItem(introKey) === 'read'; } catch { storageAvailable = false; }
-  const save = () => { try { localStorage.setItem(key, JSON.stringify(state)); } catch { storageAvailable = false; } };
-  function resolveDeparture(back = false) {
-    let internal = false;
-    try { internal = sessionStorage.getItem('zhaohui-guide-return') === '1'; sessionStorage.removeItem('zhaohui-guide-return'); } catch { internal = true; /* 无法区分站内跳转时，保守恢复而不是代替玩家作出选择。 */ }
-    const navigation = performance.getEntriesByType?.('navigation')?.[0]?.type;
-    // 阅读申请、刷新、查阅说明都不等于放弃；只在摊牌后离开再回来时归档。
-    if (state.waiting && !state.ending && !internal && (back || navigation === 'navigate' || navigation === 'back_forward')) {
-      state.ending = 'left'; state.waiting = false; state.draft = fresh().draft; save();
-    }
+  function save({ force = false, quiet = false } = {}) {
+    try {
+      const raw = localStorage.getItem(key);
+      let stored = null; try { stored = raw ? JSON.parse(raw) : null; } catch { /* 损坏的记录允许由当前有效状态覆盖。 */ }
+      const revision = Number(stored?.revision) || 0;
+      if (!force && revision > state.revision) {
+        if (!quiet) {
+          cancelPending();state = readState(raw);
+          queueMicrotask(() => { cancelPending(); claimReview = null; if ($('#modal').open) $('#modal').close(); restoreCurrent(); toast('进度已在另一个页面更新，已保留较新的记录。'); });
+        }
+        return false;
+      }
+      state.revision = Math.max(revision,state.revision) + 1;
+      localStorage.setItem(key, JSON.stringify(state));
+    } catch { const wasAvailable=storageAvailable;storageAvailable=false;if(wasAvailable&&!quiet)toast('浏览器无法保存进度，本页仍可继续，关闭前请留意。'); }
+    return true;
   }
-  resolveDeparture();
   let requestId = 0, suggestionId = 0, endingId = 0, toastTimer;
-  let composing = false, submitting = false, activeQuery = '', openGuide = '', modalTrigger, introTrigger;
+  let lastNormal = {lookup:'',anomalous:false};
+  let composing = false, submitting = false, activeQuery = '', openGuide = '', modalTrigger, introTrigger, claimReview = null;
   const pendingTimers = new Set();
   function later(callback, delay) {
     const id = setTimeout(() => { pendingTimers.delete(id); callback(); }, reduceMotion.matches ? 0 : delay);
@@ -91,27 +115,83 @@
     $('#suggestions').hidden = !show;
     $('#search').setAttribute('aria-expanded', String(show));
   }
-  function suggestionButton(word) {
+  function suggestionRow(entry) {
+    if (entry.reply) {
+      const row = document.createElement('div'); row.className = 'suggestion-response';
+      row.textContent = entry.text; return row;
+    }
     const button = document.createElement('button');
-    button.type = 'button'; button.dataset.search = word;
-    button.innerHTML = `<span class="suggestion-word">${escape(word)}</span><span aria-hidden="true">↗</span>`;
+    button.type = 'button'; button.dataset.search = entry.text;
+    button.innerHTML = `<span class="suggestion-word">${escape(entry.text)}</span><span aria-hidden="true">↗</span>`;
     return button;
   }
-  function suggestions(words, query, delayed = false) {
+  function currentView() { return state.views[state.viewCursor]; }
+  function rememberView(view) {
+    state.views = [...state.views.slice(0,state.viewCursor + 1), { ...view, words:[] }].slice(-24);
+    state.viewCursor = state.views.length - 1; state.screen = 'query';
+    return currentView();
+  }
+  function suggestions(entries, query, delayed = false, delivery = null) {
     const id = ++suggestionId;
-    const list = [...new Set([query, ...words])].filter(Boolean);
+    const rows = [{text:query,reply:false},...entries.map(e => typeof e === 'string' ? {text:e,reply:false} : e)].filter(e => e.text);
+    const unique = rows.filter((e,i) => rows.findIndex(other => other.text === e.text && other.reply === e.reply) === i);
     $('#suggestions').replaceChildren();
-    if (!list.length) { showSuggestions(false); return; }
+    if (!unique.length) { showSuggestions(false); return; }
     showSuggestions(true);
-    list.forEach((word, i) => {
-      const append = () => { if (id !== suggestionId) return; const button = suggestionButton(word); $('#suggestions').append(button); };
-      if (delayed && i) later(append, 280 + i * 230); else append();
+    const view = delivery ? currentView() : null;
+    unique.forEach((entry, i) => {
+      const append = () => {
+        if (id !== suggestionId) return;
+        $('#suggestions').append(suggestionRow(entry));
+        const term=normalize(entry.text);
+        if(i>0&&Object.hasOwn(data.clues,term)&&!state.leads.includes(term))state.leads.push(term);
+        if (view) view.words.push({text:entry.text,reply:entry.reply});
+        if (delivery && entry.reply) state.heard[delivery.id] = (state.heard[delivery.id] || 0) + 1;
+        if (delivery && i === unique.length - 1) {
+          state.pending = state.pending.filter(p => p.term + ':' + p.variant !== delivery.id);
+          renderTrail(); save(); announce('查询建议已显示完整。');
+        }
+      };
+      if (delayed && i) later(append, 180 + i * 180); else append();
     });
-    if (delayed && words.length) later(() => { if (id === suggestionId) announce('搜索建议已更新。'); }, 400 + list.length * 230);
+  }
+  function responseFor(term, forced) {
+    const base = data.clues[term];
+    const proof = state.seen.includes('0003') || state.seen.includes('他问了什么');
+    let variant = forced || (term === '我的东西' ? (state.seen.includes('B3') ? 'located' : 'early') : term === '审核' ? (proof ? 'checked' : 'early') : term === '怎么帮你' ? (state.seen.includes('审核') ? 'claim' : state.seen.includes('B3') ? 'badge' : 'early') : term === '认领后会怎样' ? (state.seen.includes('审核') ? 'ready' : 'early') : term === '不认领会怎样' ? (state.seen.includes('认领表') ? 'ready' : 'early') : term === '骗我' && state.seen.includes('审核') ? 'confession' : 'base');
+    let result = { ...base, variant, id:term + ':' + variant };
+    if (term === '我的东西' && variant === 'early') result = {...result, page:'property-request', words:['我可以替你查', '但先确认一下我留下的工牌'],queries:['你在哪','怎么帮你']};
+    if (term === '我的东西' && variant === 'located') result = {...result, page:'property',words:['我补了一条暂存登记','还没有找到入库单','你先核对审核要求'],queries:['审核','入职记录']};
+    if (term === '审核' && variant === 'early') result = {...result,words:['我现在碰不到实物架','先让我离开，我才能继续找','申请可以先看，不必立刻签'],queries:['认领表','入职记录','骗我']};
+    if (term === '审核' && variant === 'checked') result = {...result,words:['这条登记是我补的','我没有找到你的东西','我想让你认领的是我'],queries:['为什么要认领你','认领表','骗我']};
+    if (term === '怎么帮你') {
+      if (variant === 'early') result = {...result,words:['先确认我的工牌还在不在'],queries:['你在哪','我的东西']};
+      if (variant === 'badge') result = {...result,words:['背面有关联档案','核对之后你再决定要不要帮我'],queries:['入职记录','我的东西']};
+      if (variant === 'claim') result = {...result,words:['申请的对象是我','你可以先把条款看完'],queries:['认领表','入职记录']};
+    }
+    if(term==='认领后会怎样') result={...result,words:variant==='ready'?['完整附则就在申请里','看完再决定，不必现在签']:['先确认我留下的工牌','还没有到签署的时候'],queries:variant==='ready'?['认领表','入职记录']:['你在哪','我的东西']};
+    if(term==='不认领会怎样') result={...result,words:variant==='ready'?['我会继续留在这里','但你可以不签']:['你可以先继续找自己的东西','我会等'],queries:variant==='ready'?['认领表']:['我的东西','你在哪']};
+    if (term === '骗我' && variant === 'confession') result = {...result,words:['是我加了那条登记','它不是拾获凭据','我只是想让你继续留下'],queries:['认领表','为什么要认领你']};
+    return result;
+  }
+  function pendingResponses() {
+    if (state.ending) return [];
+    return state.pending.filter(p => {
+      if (state.seen.includes('岗位职责') && p.term !== '岗位职责') return false;
+      const response = responseFor(p.term);
+      return response.variant === p.variant && (state.heard[response.id] || 0) < response.words.length;
+    });
   }
   function allItems() { return [...state.registrations, ...data.items]; }
   function normalize(query) {
     let term = query.normalize('NFKC').replace(/[？?！!。]+$/u, '').trim().replace(/\s+/g, ' ');
+    if (/^b\s*3(?:层|楼)?$/i.test(term)) term = 'B3';
+    const numbered = term.match(/^(?:编号|登记|第)?(000[123])(?:号|条)?$/); if (numbered) term = numbered[1];
+    if (/^(?:我(?:丢的|遗失的)|我的).*(?:在哪|呢|找到了吗)$/.test(term) && state.seen.includes('你是谁')) term = '我的东西';
+    if (/^(?:我(?:应该|该)?怎么帮你|怎么帮你出去)$/.test(term)) term = '怎么帮你';
+    const compact=term.replace(/[\s，,、]/g,'');
+    if(/^(?:(?:如果|要是|那么|那))?(?:我)?认领你(?:之后|以后|后)?(?:我)?(?:会怎么样|会怎样|会发生什么|会有什么后果)$/.test(compact)) term=state.seen.includes('认领表')?'岗位职责':'认领后会怎样';
+    if(/^(?:我是不是会|我会不会|是不是会)(?:变成你|接替你)$/.test(compact)) term=state.seen.includes('认领表')?'岗位职责':'认领后会怎样';
     const canonical = Object.keys(data.clues).concat(Object.keys(data.aliases)).find(x => x.toLowerCase() === term.toLowerCase());
     term = canonical || term;
     return Object.hasOwn(data.aliases, term) ? data.aliases[term] : term;
@@ -164,10 +244,12 @@
         record('未拾获物品 / 5003', [['登记名称','Elias Rook'],['年龄 / 职业','34 岁 / 制图员'],['失踪时间','1974-11-03'],['地点','Harrow House，3 号厅西北角，建筑结构内部'],['类别 / 状态','E / 待拾获']], '市政原记录：擅自离岗。另一副本：未结案，建议移交失物招领处。2019 年 Danny 的附注：它一直在布展。它布的是它自己出来的路。', next('上一个','查阅 Danny 的协查附件')); break;
       case 'recruit':
         record('招聘广告 / 2019 年存档', [['发布日期','2019-06-01'],['岗位','远程客服'],['工作内容','登记审核、回复查询'],['薪资','市场平均薪资的三倍'],['合同索引','合同']], '本广告已失效，仅保留历史快照。', next('合同','查看历史合同索引')); break;
+      case 'property-request':
+        record('失物查询委托', [['查询物品',state.original || '尚未填写'],['已核验拾获记录','暂未找到'],['客服状态','位置及工牌尚待核对']], '尚无证据证明这件物品在库。你可以先确认对方的身份，也可以继续核对普通拾获登记。', next('你在哪','询问工牌所在位置')); break;
       case 'property':
         record('临时补录 / ' + (state.original || '你的失物'), [['临时编号','B3-TEMP'],['填写地点','B3 层，失物架'],['入库凭据','缺失'],['记录性质','客服人工补录，尚未核验'],['操作要求','先审核，再认领']], '这不是独立的拾获证明。物品名称与搜索词相同，创建来源为客服 0001。', next('审核','核对入库与审核要求')); break;
       case 'audit':
-        record('审核结果 / B3-TEMP', [['原始拾获记录','未检索到'],['临时登记','人工添加，不能证明物品在库'],['关联申请对象','小鹿 / 客服 0001'],['申请类型','特殊人员认领'],['当前申请状态','尚未提交']], '你遗失的物品没有入库凭据。这份关联申请认领的是客服 0001，不能用于领取你的失物。查看申请不代表同意签署。', next('认领表','仅查看关联认领表') + next('为什么要认领你','询问申请对象为何改变')); break;
+        record('审核结果 / B3-TEMP', [['入库凭据','未提供'],['临时登记','客服补录，不是拾获证明'],['关联申请对象','小鹿 / 客服 0001'],['申请类型','特殊人员认领'],['承诺核验','尚无独立凭据']], '对方要求先处理人员认领，再继续查找失物。这只是对方的承诺；两项申请没有自动关联。你可以查看申请，也可以先查档或提出质疑。', next('认领表','仅查看关联认领表') + next('入职记录','先核对客服档案') + next('骗我','质疑未核验的承诺')); break;
       case 'claim': claimForm(); break;
       case 'terms':
         record('特殊认领附则', [['认领对象','客服 0001 / 小鹿'],['继受范围','该对象在系统中遗留的全部责任与义务'],['包含事项','岗位职责'],['生效条件','填写认领人姓名并确认提交']], '仅打开本页、查阅说明或刷新页面，不构成签署。', next('岗位职责','查询“岗位职责”的含义')); break;
@@ -177,7 +259,7 @@
     }
   }
   function claimForm() {
-    $('#results').innerHTML = `<article class="record warning"><div class="record-header"><span>特殊认领申请 / 0001</span><span>未提交</span></div><h3>特殊认领申请</h3><p class="record-note">本表认领对象为小鹿（客服 0001），不是你遗失的物品。查看或离开表格不会自动提交。</p><form id="claim-form" class="claim-form"><label>对象编号<input value="客服 0001" readonly></label><label>对象名称<input value="小鹿（关联工牌 0001）" readonly></label><label>认领人姓名<input name="claimant" autocomplete="off" maxlength="30" required placeholder="填写即将签署的姓名" value="${escape(state.draft.name)}"></label><label>认领理由<textarea name="reason" required maxlength="300" placeholder="请填写认领理由">${escape(state.draft.reason)}</textarea></label><div class="claim-terms">认领人确认：本人自愿承担被认领对象所遗留之全部责任与义务，包括但不限于该对象在系统中的<button type="button" data-search="岗位职责">岗位职责</button>。 <button type="button" data-search="免责条款">查阅完整附则</button></div><p id="claim-error" class="form-error" role="alert" hidden></p><div class="choice"><button class="record-action" type="submit">确认签署并认领 &gt;&gt;</button><button type="button" id="leave">放弃认领，结束查询</button></div></form></article>`;
+    $('#results').innerHTML = `<article class="record warning"><div class="record-header"><span>特殊认领申请 / 0001</span><span>未提交</span></div><h3>特殊认领申请</h3><p class="record-note">本表认领对象为小鹿（客服 0001），不是你遗失的物品。查看表格不会自动提交。关闭页面会保留草稿，不会替你签署或放弃。</p><form id="claim-form" class="claim-form"><label>对象编号<input value="客服 0001" readonly></label><label>对象名称<input value="小鹿（关联工牌 0001）" readonly></label><label>认领人姓名<input name="claimant" autocomplete="off" maxlength="30" required placeholder="填写即将签署的姓名" value="${escape(state.draft.name)}"></label><label>认领理由<textarea name="reason" required maxlength="300" placeholder="请填写认领理由">${escape(state.draft.reason)}</textarea></label><div class="claim-terms">认领人确认：本人自愿承担被认领对象所遗留之全部责任与义务，包括但不限于该对象在系统中的<button type="button" data-search="岗位职责">岗位职责</button>。 <button type="button" data-search="免责条款">查阅完整附则</button></div><p id="claim-error" class="form-error" role="alert" hidden></p><div class="choice"><button class="record-action" type="submit">确认签署并认领 &gt;&gt;</button><button type="button" id="leave">放弃认领，结束查询</button></div></form></article>`;
   }
   function emptySearch() {
     $('#results').innerHTML = '<div class="empty"><span class="empty-symbol" aria-hidden="true">⌕</span><h3>没有找到相关失物</h3><p>可以试试物品名称、地点或登记编号。<br>暂时没有记录的物品，也可能正在等待登记。</p><button class="text-link" data-nav="all">返回失物大厅 ↗</button></div>';
@@ -187,40 +269,63 @@
     return allItems().filter(item => `${item.name} ${item.type} ${item.place} ${item.id} ${item.description}`.toLowerCase().includes(q));
   }
   function normalSearch(query, allowAnomaly) {
-    const matches = matchesFor(query);
+    const property = query.replace(/^(?:我想找|帮我找|我丢的|我遗失的|我的)/,'').replace(/(?:在哪里|在哪|呢|找到了吗|不见了)$/,'').trim();
+    const lookup = property === '东西' && state.original ? state.original : property || query;
+    const matches = matchesFor(lookup);
     const propertyQuery = matches.length > 0 || query === state.original || /钱包|钥匙|耳机|证件|卡片|校园卡|手机|背包|手表|雨伞|围巾|戒指|项链|眼镜|书包|水杯/.test(query);
     const anomalous = allowAnomaly && propertyQuery && !state.seen.includes('岗位职责');
-    if (anomalous) { state.anomalySeen = true; if (!state.original) state.original = query; }
+    if (anomalous) { state.anomalySeen = true; if (!state.original) state.original = lookup; }
+    lastNormal={lookup,anomalous};
     if (matches.length || anomalous) board(matches, anomalous); else emptySearch();
     return matches.length + (anomalous ? 1 : 0);
   }
-  function canAccess(term) {
+  function canOffer(term) {
     const clue = data.clues[term]; if (!clue) return false;
     if (state.seen.includes(term)) return true;
     if (clue.anomaly && !state.anomalySeen) return false;
+    if (clue.needs?.some(fact => !state.facts.includes(fact))) return false;
     if (clue.after?.some(parent => !state.seen.includes(parent))) return false;
     if (clue.any?.length && !clue.any.some(parent => state.seen.includes(parent))) return false;
     return true;
   }
+  function canAccess(term) {
+    if(!canOffer(term))return false;
+    return state.seen.includes(term) || !data.indexTerms.includes(term) || state.leads.includes(term);
+  }
+  function revealRecordLinks() {
+    for(const link of $('#results').querySelectorAll('[data-search]')) {
+      const term=normalize(link.dataset.search);
+      if(Object.hasOwn(data.clues,term)&&canOffer(term)&&!state.leads.includes(term))state.leads.push(term);
+    }
+  }
   function currentHint() {
-    if (state.ending || state.seen.includes('岗位职责')) return null;
-    if (!state.anomalySeen) return 'start';
-    const steps = [
-      ['你是谁','identity'], ['我是小鹿','name'], ['你在哪','location'], ['B3','basement'],
-      ['入职记录','employee'], ['0002','previous'], ['0003','chain'], ['上一个','visitor'],
-      ['他问了什么','cache'], ['他走了','departure'], ['我的东西','property'], ['审核','audit'],
-      ['认领表','claim'], ['免责条款','terms'], ['岗位职责','duties']
-    ];
-    const furthest = steps.reduce((last, [term], i) => state.seen.includes(term) ? Math.max(last, i) : last, -1);
-    return steps.slice(furthest + 1).find(([term]) => !state.seen.includes(term) && canAccess(term))?.[1] || null;
+    const seen = term => state.seen.includes(term);
+    if(state.ending||seen('岗位职责'))return null;
+    if(!state.anomalySeen)return 'start';
+    if(!seen('你是谁'))return 'identity';
+    if(!seen('B3'))return canOffer('B3')?'basement':'location';
+    const context=state.lastClue;
+    const related={
+      'B3':'employee','入职记录':'previous','0002':'chain','0003':'visitor','你懂了吗':'visitor',
+      '骗我':seen('审核')?'claim':'visitor','没说完什么':'visitor','上一个':'cache','他问了什么':'departure',
+      '他走了':'property','我的东西':'audit','审核':'claim','为什么要认领你':'claim','认领表':'terms','免责条款':'duties',
+      '怎么帮你':seen('审核')?'claim':'employee'
+    };
+    const eligible = id => {
+      const term=data.hints[id]?.keyword;if(!term||!canOffer(normalize(term)))return false;
+      return !seen(normalize(term)) || (id==='property'&&!state.facts.includes('temporary-record'));
+    };
+    if(related[context]&&eligible(related[context]))return related[context];
+    const candidates=seen('认领表')?['terms','duties','employee','previous','chain','visitor','cache']:['employee','previous','chain','visitor','cache','departure','property','audit','claim'];
+    return candidates.find(eligible)||null;
   }
   function nextAccessible() {
     if (state.ending || state.seen.includes('岗位职责')) return [];
-    const questions = (data.clues[state.lastClue]?.queries || []).filter(q => canAccess(normalize(q)));
+    const questions = (state.lastClue ? responseFor(state.lastClue).queries : []).filter(q => canAccess(normalize(q)));
     const hint = currentHint();
     if (hint && hint !== 'start') {
       const term = data.hints[hint].keyword;
-      if (canAccess(normalize(term)) && !questions.includes(term)) questions.push(term);
+      if (canAccess(normalize(term)) && state.leads.includes(normalize(term)) && !questions.includes(term)) questions.push(term);
     }
     return questions;
   }
@@ -254,6 +359,7 @@
     $('#hint-search').hidden = level !== 3;
     if (level === 3) {
       $('#hint-search').dataset.search = data.hints[id].keyword;
+      const lead=normalize(data.hints[id].keyword);if(!state.leads.includes(lead))state.leads.push(lead);
       $('#hint-search').textContent = `检索「${data.hints[id].keyword}」 ↗`;
     } else {
       $('#hint-search').removeAttribute('data-search'); $('#hint-search').textContent = '';
@@ -265,74 +371,97 @@
     $('#return-claim').hidden = !(state.seen.includes('认领表') && !state.ending);
     $('#search-objective').hidden = !state.original || !!state.ending;
     $('#objective-name').textContent = state.original;
+    $('#ask-property').hidden = !state.seen.includes('你是谁') || !!state.ending;
+    const unread = pendingResponses();
+    $('#resume-reply').hidden = !unread.length;
+    $('#resume-reply').textContent = unread.length ? `还有未显示完的查询建议：${unread[0].query} · 继续查看 >>` : '';
+    $('#query-navigation').hidden = state.views.length < 2 || !!state.ending;
+    $('#query-back').disabled = state.viewCursor <= 0;
+    $('#query-forward').disabled = state.viewCursor >= state.views.length - 1;
+    $('#query-position').textContent = state.views.length ? `${state.viewCursor + 1} / ${state.views.length}` : '';
     renderGuide();
   }
   function setMeta(text) { $('#result-meta').hidden = false; $('#result-meta').textContent = text; }
-  function search(raw) {
+  function search(raw, {resume = false} = {}) {
     const query = String(raw).trim().slice(0,80);
     if (!query) { $('#search').focus(); return; }
     cancelPending();
     const id = requestId;
     $('#search').value = query; activeQuery = query;
     $('#results-title').textContent = '查询结果';
-    $('#results').classList.add('is-loading'); $('#results').setAttribute('aria-busy', 'true');
-    $('#results').inert = true;
-    $('#search-form').classList.add('is-searching'); $('.search-submit').setAttribute('aria-label', '正在查找，输入新关键词可重新查询');
-    setMeta(`正在检索：${query}`); suggestions([],query);
-    announce('正在检索失物信息。');
+    $('#results').classList.add('is-loading'); $('#results').setAttribute('aria-busy', 'true'); $('#results').inert = true;
+    $('#search-form').classList.add('is-searching'); $('.search-submit').setAttribute('aria-label','正在查找');
+    setMeta(`正在检索：${query}`); suggestions([],query); announce('正在检索失物信息。');
     const box = $('.search-section').getBoundingClientRect();
-    if (box.top < -40 || box.top > window.innerHeight * .5) $('.search-section').scrollIntoView({ behavior: reduceMotion.matches ? 'instant' : 'smooth', block: 'start' });
+    if (box.top < -40 || box.top > window.innerHeight * .5) $('.search-section').scrollIntoView({behavior:reduceMotion.matches?'instant':'smooth',block:'start'});
     later(() => {
       if (id !== requestId) return;
-      const term = normalize(query), clue = Object.hasOwn(data.clues, term) ? data.clues[term] : null;
+      const term = normalize(query), clue = Object.hasOwn(data.clues,term) ? data.clues[term] : null;
       const silent = state.seen.includes('岗位职责');
-      let words = [], count = null;
+      let entries = [], count = null, kind = 'empty', response = null, delivery = null;
       if (state.ending) {
-        if (state.ending === 'claimed' && (query === state.name || term === 'B3')) { board([]); count = 1; }
-        else if (clue) { if (term === '员工通道') errorPage(); else { emptySearch(); count = 0; } }
-        else count = normalSearch(query, false);
+        if (state.ending === 'claimed' && (query === state.name || term === 'B3')) { board([]); count=1; kind='normal'; }
+        else if (clue) { if (term === '员工通道') errorPage(); else emptySearch(); }
+        else { count=normalSearch(query,false); kind='normal'; }
       } else if (!clue) {
-        // 普通寒暄、系统词与“救我”不触发异常，也不会污染最初失物名称。
-        if (ordinaryOnly.test(normalize(query))) { errorPage(); } else {
-          count = normalSearch(query, true);
-          if (!count && state.anomalySeen) { errorPage(); words = nextAccessible(); }
-        }
+        if (ordinaryOnly.test(term)) errorPage();
+        else { count=normalSearch(query,true); kind='normal'; if (!count && state.anomalySeen) { errorPage();kind='empty';entries=nextAccessible(); } }
+      } else if (term === '我的东西' && !state.seen.includes('你是谁')) {
+        count=normalSearch(query,true);kind='normal';
       } else if (!canAccess(term)) {
-        errorPage(true); if (!silent) words = nextAccessible();
+        errorPage(true);kind='blocked';if(!silent)entries=nextAccessible();
       } else {
-        const repeated = state.seen.includes(term);
-        if (!repeated) state.seen.push(term);
-        state.level = Math.max(state.level, clue.level || 0);
-        state.lastClue = term;
-        if (term === '岗位职责') state.waiting = true;
-        renderPage(clue.page);
-        if (!silent) words = [...(!repeated ? clue.words : []), ...(clue.queries || []).filter(q => canAccess(normalize(q)))];
-        document.body.classList.toggle('archive-mode', !!clue.page);
-        document.body.classList.toggle('silence-mode', state.seen.includes('岗位职责'));
+        response = responseFor(term);kind='clue';
+        if (!state.seen.includes(term)) state.seen.push(term);
+        state.level=Math.max(state.level,clue.level||0);state.lastClue=term;
+        if (term==='我的东西' && response.variant==='located' && !state.facts.includes('temporary-record')) state.facts.push('temporary-record');
+        if(term==='岗位职责')state.waiting=true;
+        renderPage(response.page);revealRecordLinks();
+        if(!silent || (resume && term==='岗位职责')) {
+          const heard=state.heard[response.id]||0;
+          entries=[...response.words.slice(heard).map(text=>({text,reply:true})),...response.queries.filter(q=>canOffer(normalize(q)))];
+          if(heard<response.words.length) {
+            if(!state.pending.some(p=>p.term===term&&p.variant===response.variant))state.pending=[...state.pending,{term,variant:response.variant,query}].slice(-12);
+            delivery={id:response.id};
+          }
+        }
+        document.body.classList.toggle('archive-mode',!!response.page);
+        document.body.classList.toggle('silence-mode',state.seen.includes('岗位职责'));
       }
-      state.history = [...state.history.filter(q => q !== query), query].slice(-12);
-      $('#results').classList.remove('is-loading'); $('#results').setAttribute('aria-busy', 'false');
-      $('#results').inert = false;
-      $('#search-form').classList.remove('is-searching'); $('.search-submit').setAttribute('aria-label', '查找失物');
-      setMeta(`检索关键词：${query} · ${count === null ? '索引读取完成' : `找到 ${count} 条登记`}`);
-      suggestions(words, query, true); animateResults(); renderTrail(); save();
-      announce(count === null ? '查询完成，请留意搜索建议与记录。' : `查询完成，找到 ${count} 条登记。`);
-    }, 380);
+      state.history=[...state.history.filter(q=>q!==query),query].slice(-12);
+      rememberView({query,term:clue?term:'',kind,variant:response?.variant||'base',lookup:kind==='normal'?lastNormal.lookup:'',anomalous:kind==='normal'&&lastNormal.anomalous});
+      $('#results').classList.remove('is-loading');$('#results').setAttribute('aria-busy','false');$('#results').inert=false;
+      $('#search-form').classList.remove('is-searching');$('.search-submit').setAttribute('aria-label','查找失物');
+      setMeta(`检索关键词：${query} · ${count===null?'索引读取完成':`找到 ${count} 条登记`}`);
+      suggestions(entries,query,true,delivery || {id:null});animateResults();renderTrail();save();
+      announce('查询完成，记录与查询建议已经更新。');
+    },380);
   }
-  function home(all = false) {
-    cancelPending(); activeQuery = '';
-    $('#results-title').textContent = all ? '失物大厅' : '最近拾获'; $('#result-meta').hidden = true;
-    showSuggestions(false); $('#search').value = ''; board(); animateResults();
+  function home(all = false, remember = true) {
+    cancelPending();activeQuery='';state.screen=all?'all':'home';
+    $('#results-title').textContent=all?'失物大厅':'最近拾获';$('#result-meta').hidden=true;
+    showSuggestions(false);$('#search').value='';board();animateResults();
     document.body.classList.remove('archive-mode');
-    document.body.classList.toggle('silence-mode', state.seen.includes('岗位职责') && !state.ending);
-    $('#search').placeholder = state.ending === 'claimed' ? '输入你捡到的东西' : '试试搜索：钱包、钥匙、校园卡……';
-    $('#staff-count').textContent = state.ending === 'left' ? '本站员工：0' : '本站员工：1';
-    document.querySelectorAll('.nav').forEach(button => {
-      const active = button.dataset.nav === (all ? 'all' : 'home');
-      button.classList.toggle('active', active);
-      if (active) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current');
-    });
+    document.body.classList.toggle('silence-mode',state.seen.includes('岗位职责')&&!state.ending);
+    $('#search').placeholder=state.ending==='claimed'?'输入你捡到的东西':'试试搜索：钱包、钥匙、校园卡……';
+    $('#staff-count').textContent=state.ending==='left'?'本站员工：0':'本站员工：1';
+    document.querySelectorAll('.nav').forEach(button=>{const active=button.dataset.nav===(all?'all':'home');button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
+    if(remember&&!state.ending){rememberView({kind:'home',query:all?'失物大厅':'首页',term:'',variant:all?'all':'home'});state.screen=all?'all':'home';save();}
     renderTrail();
+  }
+  function restoreCurrent() {
+    const screen=state.screen,view=currentView();
+    home(screen==='all',false);
+    if(state.ending || screen!=='query' || !view || view.kind==='home')return;
+    activeQuery=view.query;state.screen='query';$('#search').value=view.query;$('#results-title').textContent='查询记录';
+    if(view.kind==='clue'&&state.seen.includes(view.term)){const response=responseFor(view.term,view.variant);renderPage(response.page);revealRecordLinks();document.body.classList.toggle('archive-mode',!!response.page);}
+    else if(view.kind==='normal'){const matches=matchesFor(view.lookup||view.query);if(matches.length||view.anomalous)board(matches,view.anomalous);else emptySearch();}
+    else errorPage(view.kind==='blocked');
+    setMeta(`已保存的查询：${view.query}`);suggestions(view.words.filter(e=>e.text!==view.query||e.reply),view.query,false);animateResults();renderTrail();
+  }
+  function navigateView(offset) {
+    const index=state.viewCursor+offset;if(state.ending||index<0||index>=state.views.length)return;
+    cancelPending();state.viewCursor=index;const view=currentView();state.screen=view.kind==='home'?(view.variant==='all'?'all':'home'):'query';restoreCurrent();save();
   }
   function modal(title, html) {
     modalTrigger = document.activeElement;
@@ -394,10 +523,21 @@
   function finishEnding() {
     $('#ending').close(); home(); $('#search').focus();
   }
+  function reviewClaim(name, reason) {
+    if(claimReview || submitting || state.ending)return;
+    cancelPending();if(!save())return;
+    modal('认领申请 · 提交前核对', `<h2>请核对本次申请</h2><dl class="detail-list"><dt>认领对象</dt><dd>小鹿 / 客服 0001</dd><dt>认领人</dt><dd>${escape(name)}</dd><dt>认领理由</dt><dd>${escape(reason)}</dd></dl><p>本申请按完整附则生效。确认提交后，本次认领不可撤回；现在关闭此窗口，仍可继续查阅和修改草稿。</p><div class="detail-actions"><button class="record-action" id="confirm-claim" type="button">确认提交本次认领</button><button class="text-link" id="cancel-review" type="button">返回修改 / 继续查阅</button></div>`);
+    claimReview={name,reason};
+  }
+  function reviewLeave() {
+    if(state.ending)return;
+    cancelPending();
+    modal('认领申请 · 放弃查询', '<h2>结束本次认领？</h2><p>确认后，这份人工补录与特殊认领申请将不再继续。已经查阅的内容仍保存在本机。只关闭本窗口或浏览器，会保留草稿。</p><div class="detail-actions"><button class="record-action" id="confirm-leave" type="button">确认放弃本次认领</button><button class="text-link" id="cancel-review" type="button">暂不决定，继续查阅</button></div>');
+  }
   function transfer(name) {
     if (submitting || state.ending) return;
     submitting = true; cancelPending();
-    state.name = name; state.ending = 'claimed'; state.waiting = false; state.draft = fresh().draft; save();
+    state.name = name; state.ending = 'claimed'; state.waiting = false; state.draft = fresh().draft; if(!save()){submitting=false;return;}
     $('#claim-form button[type="submit"]').disabled = true;
     $('#ending-name').textContent = `员工 0001 / ${name} / 待认领`;
     $('#ending-reveal').hidden = true; $('#ending-status').textContent = '正在审核 / VERIFYING';
@@ -411,7 +551,7 @@
     }, 2400);
   }
   function leave() {
-    cancelPending(); state.ending = 'left'; state.waiting = false; state.draft = fresh().draft; save();
+    cancelPending(); state.ending = 'left'; state.waiting = false; state.draft = fresh().draft; if(!save())return;
     home(); document.body.classList.add('departure');
     later(() => document.body.classList.remove('departure'), 1000);
     $('#search').focus(); announce('认领已取消。');
@@ -462,28 +602,25 @@
   });
   document.addEventListener('click', event => {
     if (!event.target.closest('.search-section')) { suggestionId++; showSuggestions(false); }
-    if (event.target.closest('#leave')) leave();
+    if (event.target.closest('#leave')) reviewLeave();
   });
   $('#close-modal').addEventListener('click', () => $('#modal').close());
   $('#modal').addEventListener('click', event => {
+    if(event.target.closest('#cancel-review')) {$('#modal').close();return;}
+    if(event.target.closest('#confirm-claim')) {const review=claimReview;if(!review||state.ending)return;$('#modal').close();claimReview=null;transfer(review.name);return;}
+    if(event.target.closest('#confirm-leave')) {if(state.ending)return;$('#modal').close();leave();return;}
     if (event.target === $('#modal')) {
       const r = $('#modal').getBoundingClientRect();
       if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) $('#modal').close();
     }
     if (event.target.closest('#confirm-reset')) {
-      cancelPending(); endingId++; submitting = false; state = fresh(); save();
+      cancelPending(); endingId++; submitting = false; state = fresh(); save({force:true});
       introSeen = false;
       try { localStorage.removeItem(introKey); } catch { storageAvailable = false; }
       $('#modal').close(); home(); openIntro(); toast('本机记录已清除，可以重新开始寻找。');
     }
   });
-  $('#modal').addEventListener('close', () => { if (modalTrigger?.isConnected) modalTrigger.focus({ preventScroll: true }); });
-  document.addEventListener('click', event => {
-    const link = event.target.closest('a[href]');
-    if (!link || !/^guide\.html(?:[?#]|$)/.test(link.getAttribute('href')) || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    // 所有站内说明入口都不阻止默认导航，也不计作最终放弃。
-    try { sessionStorage.setItem('zhaohui-guide-return','1'); } catch { /* 页面仍可访问。 */ }
-  });
+  $('#modal').addEventListener('close', () => { claimReview=null; if (modalTrigger?.isConnected) modalTrigger.focus({ preventScroll: true }); });
   $('#close-intro').addEventListener('click', closeIntro);
   $('#intro-skip').addEventListener('click', closeIntro);
   $('#intro-return').addEventListener('click', closeIntro);
@@ -496,6 +633,9 @@
     if (!property) { $('#intro-error').hidden = false; $('#intro-item').setAttribute('aria-invalid','true'); $('#intro-item').focus(); return; }
     state.original = property; closeIntro(); search(property); $('#search').focus({ preventScroll: true });
   });
+  $('#resume-reply').addEventListener('click',()=>{const pending=pendingResponses()[0];if(pending){search(pending.query,{resume:true});$('#search').focus({preventScroll:true});}});
+  $('#query-back').addEventListener('click',()=>navigateView(-1));
+  $('#query-forward').addEventListener('click',()=>navigateView(1));
   $('#show-all').addEventListener('click', () => home(true));
   $('#hint-toggle').addEventListener('click', () => {
     const id = currentHint(); if (!id) return;
@@ -535,25 +675,25 @@
     if (form.id === 'claim-form') {
       if (state.ending) return;
       if (!String(values.get('reason') || '').trim()) { formError(form,'请填写认领理由。',form.elements.reason); return; }
-      transfer(name); return;
+      reviewClaim(name,String(values.get('reason')).trim()); return;
     }
     if (form.id === 'ordinary-claim-form') {
       if (String(values.get('proof') || '').trim().length < 6) { formError(form,'请至少填写 6 个字的物品特征。',form.elements.proof); return; }
       const id = form.dataset.id;
       if (!allItems().some(item => item.id === id)) return;
-      state.applications[id] = { receipt: `ZH-R-${Date.now().toString().slice(-8)}` }; save();
+      state.applications[id] = { receipt: `ZH-R-${Date.now().toString().slice(-8)}` }; if(!save())return;
       ordinaryClaim(id); home(true); toast('本机申请已留存。'); return;
     }
     for (const field of ['place','description']) if (!String(values.get(field) || '').trim()) { formError(form,'请完整填写拾获地点与物品描述。',form.elements[field]); return; }
     if (state.registrations.length >= 50) { formError(form,'本机登记已达 50 条，请清除本机记录后重试。',nameField); return; }
     const id = `L${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
-    state.registrations.unshift({ id, name, place: String(values.get('place')).trim(), description: String(values.get('description')).trim(), type: String(values.get('type')), date: new Date().toLocaleDateString('sv-SE'), icon:'card' }); save();
+    state.registrations.unshift({ id, name, place: String(values.get('place')).trim(), description: String(values.get('description')).trim(), type: String(values.get('type')), date: new Date().toLocaleDateString('sv-SE'), icon:'card' }); if(!save())return;
     $('#modal').close(); home(true); $('.results-area').scrollIntoView({behavior: reduceMotion.matches ? 'instant' : 'smooth'});
     toast(storageAvailable ? '拾物信息已保存到当前浏览器。' : '拾物信息已保存到本页，浏览器未允许持久保存。');
   });
-  window.addEventListener('pagehide', () => { cancelPending(); save(); });
+  window.addEventListener('pagehide', () => { cancelPending(); save({quiet:true}); });
   window.addEventListener('pageshow', event => {
-    if (event.persisted) { resolveDeparture(true); if ($('#ending').open) $('#ending').close(); home(); }
+    if(event.persisted){ try{const raw=localStorage.getItem(key);if(raw)state=readState(raw);}catch{} if($('#ending').open)$('#ending').close();restoreCurrent();}
   });
   window.addEventListener('storage', event => {
     if (event.key !== key && event.key !== null) return;
@@ -562,9 +702,9 @@
     if ($('#modal').open) $('#modal').close();
     if ($('#ending').open) $('#ending').close();
     if ($('#intro').open) closeIntro();
-    home(); toast('本机记录已在另一个页面更新。');
+    claimReview=null;restoreCurrent();toast('本机记录已在另一个页面更新。');
   });
-  home();
+  restoreCurrent();
   if (!introSeen && !hasStarted()) openIntro();
   if (!storageAvailable) toast('浏览器未允许本地保存，本次进度仅在当前页面有效。');
 })();
