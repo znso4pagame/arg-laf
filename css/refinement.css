@@ -1,0 +1,1236 @@
+/* 第三版界面：旧门户的清楚层级，与个人站的纸本阅读感。 */
+body {
+  overflow-wrap: break-word;
+}
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #b87f3c;
+  outline-offset: 3px;
+}
+dialog::backdrop {
+  background: #243545a6;
+  backdrop-filter: blur(2px);
+}
+dialog {
+  max-height: 88dvh;
+  overflow: auto;
+  scrollbar-color: #a3b4bf #edf1f2;
+}
+body > .utility {
+  background: #e3eaf0;
+}
+.wrap {
+  max-width: 1080px;
+}
+.header {
+  border-top: 3px solid #34678e;
+  box-shadow: 0 3px 10px #35566d0c;
+}
+.brand {
+  margin: 21px 25px;
+}
+.brand strong {
+  font-size: 31px;
+  letter-spacing: 3px;
+}
+.brand small {
+  letter-spacing: 1.8px;
+}
+.header-note {
+  font-family: "Songti SC", "SimSun", serif;
+  font-size: 12px;
+  color: #83929d;
+}
+.header nav {
+  background: linear-gradient(#387baa, #235b83);
+  box-shadow: inset 0 1px #ffffff40;
+}
+.nav {
+  min-height: 40px;
+  padding: 9px 28px;
+}
+.nav.active {
+  box-shadow: inset 0 -3px #d0dfeb;
+  background: #1e527c;
+}
+.nav span#my-count {
+  font:
+    10px Tahoma,
+    sans-serif;
+  display: inline-block;
+  background: #ffffff26;
+  min-width: 18px;
+  padding: 1px 4px;
+  margin-left: 6px;
+  border: 1px solid #ffffff28;
+}
+.hero {
+  padding: 25px 28px;
+  background: linear-gradient(110deg, #edf5fb, #f8fbfd);
+  border-color: #c4d4e0;
+  position: relative;
+}
+.hero:before {
+  content: "";
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  left: 0;
+  width: 3px;
+  background: #4f87ae;
+}
+.hero h1 {
+  font-size: 27px;
+  font-family: "Songti SC", "SimSun", serif;
+  letter-spacing: 2px;
+}
+.hero .eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.hero-art {
+  box-shadow: 2px 2px 0 #dfe9f0;
+}
+.portal-bulletin h2 {
+  background: #e8f0f6;
+  padding: 7px 11px;
+  letter-spacing: 2px;
+}
+.portal-bulletin p {
+  line-height: 2.1;
+}
+.search-section {
+  margin-top: 16px;
+  background: #f9fbfd;
+  border: 1px solid #b9cddd;
+  padding: 19px 22px;
+}
+.search-intro h2 {
+  font-size: 17px;
+  letter-spacing: 1px;
+}
+.search-form {
+  box-shadow: inset 0 1px 2px #50667b10;
+  border-color: #95b3ca;
+  background: white;
+}
+.search-form input {
+  font-size: 15px;
+}
+.search-submit {
+  background: linear-gradient(#377fab, #245e88);
+  border-left: 1px solid #1e587c;
+  letter-spacing: 2px;
+  min-height: 44px;
+}
+.popular {
+  gap: 11px;
+  row-gap: 6px;
+}
+.popular button {
+  padding: 2px 9px;
+  background: #edf3f7;
+  border: 1px solid #d2dfe8;
+  font-size: 11px;
+}
+.search-tools {
+  margin-top: 9px;
+  align-items: center;
+}
+.search-tools summary {
+  font-size: 11px;
+  color: #7d919e;
+}
+#history-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+}
+#history-list button {
+  border: 1px solid #d0dde6;
+  background: #fff;
+  padding: 3px 8px;
+  color: #58798f;
+  font:
+    11px Tahoma,
+    "SimSun",
+    sans-serif;
+  cursor: pointer;
+}
+.field-guide {
+  border-top: 1px dashed #d0dce5;
+}
+.guide-heading {
+  padding-top: 10px;
+}
+.guide-heading h3 {
+  font-size: 12px;
+}
+.notice {
+  background: #f8f7f0;
+  border-color: #d7d6c7;
+  font-size: 11px;
+}
+.notice-label {
+  background: #e8e4ce;
+  color: #847343;
+  letter-spacing: 1px;
+}
+.content-grid {
+  grid-template-columns: minmax(0, 1fr) 238px;
+  gap: 20px;
+}
+.section-heading {
+  border-bottom: 2px solid #537f9e;
+  padding-bottom: 11px;
+}
+.section-heading h2 {
+  font-family: "Songti SC", "SimSun", serif;
+  font-size: 22px;
+  letter-spacing: 2px;
+}
+.section-heading .eyebrow {
+  font:
+    9px Tahoma,
+    sans-serif;
+  letter-spacing: 1.5px;
+}
+.item {
+  padding: 15px 10px;
+  border-bottom: 1px solid #e0e7ed;
+  gap: 17px;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.item:hover {
+  background: #f3f7fa;
+  border-bottom-color: #adc3d3;
+}
+.item:focus-visible {
+  outline-offset: -2px;
+}
+.item-image {
+  width: 63px;
+  min-width: 63px;
+  height: 66px;
+  background: #eef3f7;
+  border: 1px solid #d4e0e8;
+  display: grid;
+  place-content: center;
+  color: #6b8ba3;
+}
+.item-image svg {
+  width: 31px;
+  height: 31px;
+  display: block;
+  margin: 0 auto;
+}
+.item-register-id {
+  font:
+    9px/1.4 Consolas,
+    monospace;
+  text-align: center;
+  letter-spacing: 1px;
+  margin-top: 4px;
+  color: #7d97a9;
+}
+.item-title strong {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.item-description {
+  font-size: 12px;
+  color: #718493;
+  line-height: 1.8;
+}
+.item-meta {
+  font-size: 10px;
+  color: #8b9ba5;
+}
+.badge {
+  background: #f2f6f0;
+  border: 1px solid #d5dfcf;
+  color: #71845e;
+  border-radius: 0;
+  font-size: 9px;
+  padding: 1px 5px;
+}
+.item-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid #d8e2e9;
+}
+.item-filters button {
+  font:
+    11px/1.5 Tahoma,
+    "SimSun",
+    serif;
+  padding: 4px 10px;
+  background: #f6f9fb;
+  border: 1px solid #d2dfe8;
+  color: #6f8594;
+  cursor: pointer;
+}
+.item-filters button[aria-pressed="true"] {
+  background: #e4eef5;
+  border-color: #9ab6cb;
+  color: #2b5e82;
+}
+.query-navigation {
+  padding: 10px 0;
+  color: #8093a2;
+  font-size: 10px;
+}
+.query-navigation button {
+  font-size: 11px;
+}
+.related-queries {
+  background: #f8fafc;
+  margin: 12px 0;
+  padding: 12px;
+  font-size: 10px;
+  border: 1px dashed #d7e2e9;
+}
+.related-queries > span {
+  color: #8f9da6;
+  letter-spacing: 1px;
+}
+.steps-panel,
+.register-panel {
+  border: 1px solid #c5d5e1;
+  box-shadow: 2px 2px 0 #eaf0f4;
+}
+.steps-panel > h2 {
+  font:
+    17px "Songti SC",
+    "SimSun",
+    serif;
+}
+.archive-note {
+  border: 1px dashed #c8d5de;
+  background: #f7f9fa;
+  padding: 14px;
+}
+.closing {
+  border-top: 1px solid #d8e2e9;
+  margin-top: 24px;
+  padding-top: 25px;
+}
+.notebook-mode .section-heading {
+  border-color: #8d967c;
+}
+.notebook-top {
+  padding: 9px 0 13px;
+  border-bottom: 1px dotted #ccd3c4;
+  color: #7d8774;
+  font-size: 11px;
+}
+.notebook {
+  background: #fcfcf8;
+  padding: 3px 12px 18px;
+}
+.notebook-search {
+  display: flex;
+  gap: 8px;
+  margin: 17px 0;
+}
+.notebook-search input {
+  flex: 1;
+  min-width: 0;
+  background: white;
+  border: 1px solid #becbb8;
+  padding: 8px 11px;
+  font:
+    12px Tahoma,
+    "SimSun",
+    serif;
+}
+.notebook-search button {
+  font:
+    11px Tahoma,
+    "SimSun",
+    serif;
+  border: 1px solid #b8c6b1;
+  background: #edf1e6;
+  color: #697e58;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.notebook-tabs {
+  gap: 0;
+  padding: 0;
+  border-bottom: 1px solid #c4d0bd;
+}
+.notebook-tabs button {
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: transparent;
+  padding: 8px 16px;
+  color: #839078;
+  font-size: 11px;
+}
+.notebook-tabs [aria-pressed="true"] {
+  background: #e7edde;
+  color: #516745;
+  border-color: #b8c8ab;
+}
+.compare-toolbar {
+  padding: 13px 0;
+  border-bottom: 1px dotted #d2dacb;
+  color: #8c9783;
+  font-size: 10px;
+}
+.compare-toolbar button,
+.notebook-card button {
+  font-size: 11px;
+  border-color: #b9c9b2;
+  background: #f2f5ed;
+  color: #627456;
+}
+.notebook-card {
+  border-color: #cbd6c3;
+  padding: 19px 22px;
+  box-shadow: 2px 2px 0 #edf0e6;
+  margin: 15px 0;
+}
+.notebook-card h3 {
+  font:
+    18px/1.5 "Songti SC",
+    "SimSun",
+    serif;
+  color: #52664a;
+}
+.notebook-card p {
+  font-size: 12px;
+  color: #7a8874;
+}
+.notebook-card-head {
+  color: #9aa38e;
+  font-size: 10px;
+}
+.notebook-card small {
+  color: #929d89;
+  font-size: 10px;
+}
+.notebook-card-actions {
+  padding: 11px 0 0;
+  border-top: 1px dotted #d9dfd2;
+  margin-top: 15px;
+  align-items: center;
+  font-size: 10px;
+}
+.notebook-card blockquote {
+  font-size: 12px;
+  background: #f7f3e8;
+  border-color: #b7a46c;
+}
+.personal-note {
+  background: repeating-linear-gradient(#fffef5 0, #fffef5 27px, #ecefdf 28px);
+  border-left: 3px solid #b7b285;
+}
+.personal-note h3 {
+  font-family: "Songti SC", "SimSun", serif;
+}
+#notebook-export {
+  display: block;
+  width: 100%;
+  min-height: 310px;
+  margin: 18px 0;
+  border: 1px solid #b9c8b0;
+  padding: 12px;
+  font:
+    11px/1.6 Consolas,
+    monospace;
+  resize: vertical;
+  white-space: pre;
+}
+.toast button {
+  margin-left: 18px;
+  background: transparent;
+  border: 1px solid #ffffff70;
+  padding: 3px 12px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+#application-panel {
+  border-top: 3px solid #9e9877;
+  background: #fbfaf3;
+  box-shadow: 3px 3px 0 #edece3;
+}
+#application-panel h2 {
+  font-family: "Songti SC", "SimSun", serif;
+  color: #726947;
+}
+.claim-form input {
+  background: white;
+}
+.claim-terms {
+  padding: 12px;
+  background: #f1eee0;
+  color: #8c8061;
+}
+.modal-head {
+  background: #edf2f5;
+  border-bottom: 1px solid #bacbd6;
+}
+.detail-list {
+  font-size: 12px;
+  line-height: 1.9;
+}
+.detail-list dt {
+  color: #8a9ba6;
+}
+.detail-list dd {
+  color: #4f6878;
+}
+/* Danny：旧个人站的照片页眉、目录与阅读栏 */
+.site {
+  width: min(1140px, 96%);
+  margin-top: 30px;
+  box-shadow:
+    5px 6px 0 #87938c2e,
+    0 16px 45px #46594e18;
+  border-color: #859792;
+}
+.top-strip {
+  background: #354b52;
+  letter-spacing: 1.7px;
+  padding: 7px 22px;
+}
+.masthead {
+  min-height: 195px;
+  padding: 32px 36px;
+  background:
+    linear-gradient(90deg, #d6dfd9 0, #c1d0c7eb 34%, #435b5600 70%),
+    url("../assets/night-window.svg") center/cover;
+  border-bottom: 3px solid #7e9381;
+}
+.masthead h1 {
+  font-size: 36px;
+  letter-spacing: 5px;
+  color: #304c45;
+  margin: 11px 0;
+}
+.masthead h1 span {
+  font-size: 17px;
+  color: #657e6b;
+}
+.masthead p {
+  font-size: 11px;
+  color: #668071;
+}
+.window-grid {
+  display: none;
+}
+.site-nav {
+  padding-left: 15px;
+  background: linear-gradient(#eff1e8, #d9e0d3);
+  box-shadow: inset 0 1px #fff;
+}
+.site-nav a {
+  padding: 10px 26px;
+  color: #5f7460;
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+.site-nav [aria-current] {
+  background: #f7f6ee;
+  border-top-color: #859779;
+  padding-top: 8px;
+  color: #3b5543;
+}
+.site-grid {
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 28px;
+  padding: 28px;
+}
+.site-grid aside section {
+  background: #f0f2e9;
+  border-color: #c7cfc0;
+  box-shadow: 2px 2px 0 #e5e9db;
+}
+.site-grid aside h2 {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #8a987e;
+}
+.avatar {
+  background: linear-gradient(135deg, #6b8577, #a5b49b);
+  outline: 1px solid #a0b097;
+  border-color: #eff3e6;
+  font-style: italic;
+}
+.profile h2 {
+  font:
+    21px Georgia,
+    serif !important;
+  color: #5f765b !important;
+}
+.profile dl {
+  border-top: 1px dotted #c4ceba;
+  padding-top: 10px;
+}
+.permission {
+  font:
+    10px Consolas,
+    Tahoma,
+    sans-serif;
+  letter-spacing: 1px;
+}
+.site-grid main > h2 {
+  font-family: "Songti SC", "SimSun", serif;
+  font-size: 25px;
+  color: #4f6751;
+  letter-spacing: 3px;
+  border-bottom: 2px solid #9eaf95;
+  padding-bottom: 12px;
+}
+.site-grid main > .fine {
+  margin: 9px 0 18px;
+  letter-spacing: 0.5px;
+}
+.entry-list article {
+  padding: 17px 9px 17px 2px;
+  border-color: #d0d6c7;
+  position: relative;
+  transition: background-color 0.15s;
+}
+.entry-list article:hover {
+  background: #eef1e7;
+}
+.entry-list article.is-read {
+  border-left: 2px solid #a6b998;
+  padding-left: 11px;
+}
+.entry-list h3 {
+  margin: 5px 0;
+}
+.entry-list h3 button {
+  font:
+    17px/1.5 "Songti SC",
+    "SimSun",
+    serif;
+  color: #4e6c54;
+}
+.entry-list p {
+  font-size: 11px;
+  line-height: 1.9;
+  color: #8a9681;
+  max-width: 560px;
+}
+.entry-date {
+  font-size: 9px;
+  color: #9ba58f;
+  letter-spacing: 0.4px;
+}
+.read-marker {
+  font:
+    9px Tahoma,
+    sans-serif;
+  color: #94a286;
+  margin-left: 12px;
+  border: 1px solid #d0d9c6;
+  padding: 1px 4px;
+}
+.reading-pane {
+  padding: 24px 27px;
+  background: #fffef7;
+  border-color: #b8c6ad;
+  box-shadow: 3px 4px 0 #e4e9d9;
+  margin: 24px 0 0;
+}
+.reading-head {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: #91a083;
+}
+.reading-head button {
+  background: #f3f5eb;
+  border-color: #c5d0ba;
+  color: #7a8b6b;
+}
+.reading-pane h2 {
+  font:
+    24px/1.6 "Songti SC",
+    "SimSun",
+    serif;
+  letter-spacing: 1px;
+  color: #4c6047;
+  margin: 20px 0;
+}
+.entry-prose p {
+  font:
+    14px/2.1 "Songti SC",
+    "SimSun",
+    serif;
+  color: #596c51;
+  margin: 16px 0;
+}
+.entry-prose p:last-child {
+  margin-bottom: 26px;
+}
+.save-note {
+  color: #a2ad98;
+  font-size: 9px;
+  padding-top: 14px;
+}
+.record-fields {
+  border-top: 1px dotted #d0d8c6;
+  border-bottom: 1px dotted #d0d8c6;
+  padding: 16px 0;
+  font-size: 11px;
+  gap: 12px;
+}
+.record-fields dt {
+  color: #99a48e;
+}
+.record-fields dd {
+  color: #5f7555;
+}
+.site-grid main.split-reading {
+  display: grid;
+  grid-template-columns: minmax(145px, 0.7fr) minmax(0, 1.3fr);
+  align-items: start;
+  column-gap: 21px;
+}
+.split-reading > h2,
+.split-reading > .fine {
+  grid-column: 1/-1;
+}
+.split-reading > .entry-list {
+  grid-column: 1;
+  grid-row: 3;
+}
+.split-reading > .reading-pane {
+  grid-column: 2;
+  grid-row: 3;
+  margin: 0;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 20px;
+}
+.split-reading .entry-list h3 button {
+  font-size: 14px;
+}
+.split-reading .entry-list p {
+  font-size: 10px;
+}
+.split-reading .entry-prose p {
+  font-size: 13px;
+}
+.image-viewer {
+  margin: 18px -7px;
+  border: 1px solid #c7cfbd;
+  background: #e9edde;
+}
+.image-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: #eff2e6;
+  border-bottom: 1px solid #cad4bf;
+  font:
+    9px Tahoma,
+    sans-serif;
+  color: #8e9f7e;
+}
+.image-tools > span:first-child {
+  margin-right: auto;
+  letter-spacing: 1px;
+}
+.image-tools button {
+  font:
+    12px/1 Tahoma,
+    sans-serif;
+  padding: 4px 7px;
+  border-color: #bbc9ad;
+  background: #f7f8ef;
+  color: #738765;
+}
+.image-tools a {
+  font-size: 9px;
+  margin-left: 5px;
+  color: #8b9b7b;
+}
+.image-viewport {
+  overflow: auto;
+  max-height: 570px;
+  padding: 9px;
+}
+.image-link {
+  display: block;
+}
+.image-viewport .image-link img {
+  margin: 0;
+  width: 100%;
+  height: auto;
+}
+.tool-heading > span {
+  font:
+    9px Consolas,
+    monospace;
+  color: #9aa58c;
+  letter-spacing: 2px;
+}
+.tool-heading h3 {
+  margin: 6px 0 12px;
+  font:
+    20px "Songti SC",
+    "SimSun",
+    serif;
+  color: #586d4f;
+}
+.timeline-tool {
+  padding: 22px;
+  background: #f5f4e8;
+  border: 1px solid #c7ceb9;
+  box-shadow: 2px 3px 0 #e7eadd;
+  margin: 25px 0;
+}
+.timeline-tool > p {
+  font-size: 11px;
+  color: #89947d;
+  line-height: 1.9;
+}
+#timeline-events {
+  padding: 0;
+  list-style: none;
+  margin: 20px 0;
+  counter-reset: record;
+}
+#timeline-events li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #d2d8c8;
+  background: #fffef5;
+  padding: 7px 10px;
+  margin: 7px 0;
+  counter-increment: record;
+}
+#timeline-events li:before {
+  content: counter(record, decimal-leading-zero);
+  font:
+    10px Consolas,
+    monospace;
+  color: #9aa88b;
+}
+#timeline-events label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 4px 0;
+  flex: 1;
+  font-size: 12px;
+  color: #687c5b;
+}
+#timeline-events li:has(input:not(:checked)) {
+  opacity: 0.5;
+  background: #eeeee5;
+}
+#timeline-events input {
+  accent-color: #7c9367;
+}
+.event-grip {
+  cursor: grab;
+  color: #a3af96;
+}
+.event-controls {
+  display: flex;
+  gap: 4px;
+}
+.event-controls button {
+  padding: 3px 7px;
+  color: #80916c;
+  border-color: #c7d0b9;
+  background: #f3f5e9;
+}
+.cabinet-box,
+.comparison-tool,
+.chain-box {
+  background: #f2f3e9;
+  padding: 22px;
+  border-color: #c2cdb8;
+  box-shadow: 2px 2px 0 #e7ecdf;
+}
+.cabinet-box h3,
+.comparison-tool h3,
+.chain-box h3 {
+  font:
+    19px "Songti SC",
+    "SimSun",
+    serif;
+  color: #657c56;
+}
+.compare-selectors {
+  background: #e7eddd;
+  padding: 10px 13px;
+  margin: 16px 0;
+}
+.comparison-columns article:not(:empty) {
+  background: #fffef6;
+  border-color: #c4cfb7;
+  padding: 17px;
+}
+.site button {
+  background: linear-gradient(#fffff8, #e5eadc);
+  border-color: #b0bea6;
+  color: #617650;
+  box-shadow: inset 0 1px #fff;
+}
+.site button:hover {
+  background: #e9efdf;
+}
+.site input,
+.site select {
+  border-color: #b5c1a9;
+  background: #fffef8;
+}
+.site input:focus,
+.site select:focus {
+  background: white;
+}
+.site .check input {
+  accent-color: #7b9268;
+}
+.site-status {
+  padding: 10px 0;
+  color: #889b78;
+  font-size: 10px;
+  border-top: 1px dotted #d2dac8;
+}
+.site footer {
+  background: #edf0e4;
+  color: #a1aa93;
+  padding: 15px 26px;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.archive-mode .site-grid main {
+  background: #e2e9d7;
+  border-color: #a8ba96;
+}
+.archive-mode .site-grid main > h2 {
+  color: #526a43;
+}
+.archive-mode .entry-list article:hover {
+  background: #d7e1ca;
+}
+@media (max-width: 900px) {
+  .wrap {
+    width: calc(100% - 16px);
+  }
+  .hero {
+    grid-template-columns: 1fr 220px;
+    padding: 20px;
+  }
+  .content-grid {
+    grid-template-columns: minmax(0, 1fr) 205px;
+    gap: 13px;
+  }
+  .site-grid {
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 19px;
+    padding: 20px;
+  }
+  .site-nav a {
+    padding: 10px 20px;
+  }
+  .site-grid main.split-reading {
+    display: block;
+  }
+  .split-reading > .reading-pane {
+    position: static;
+    max-height: none;
+    margin-top: 22px;
+  }
+  .split-reading > .entry-list {
+    display: none;
+  }
+  .split-reading .reading-pane {
+    padding: 22px;
+  }
+  .notebook-tabs button {
+    padding: 7px 12px;
+  }
+}
+@media (max-width: 650px) {
+  .header-note {
+    display: none;
+  }
+  .brand {
+    margin: 17px 19px;
+  }
+  .header nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .nav {
+    padding: 9px 17px;
+    flex: 0 0 auto;
+    min-height: 40px;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .hero {
+    display: block;
+    padding: 20px;
+  }
+  .hero-art {
+    display: none;
+  }
+  .hero h1 {
+    font-size: 23px;
+  }
+  .hero-copy > p {
+    font-size: 11px;
+  }
+  .hero-serial > span {
+    display: block;
+    margin-left: 0;
+  }
+  .search-section {
+    padding: 14px;
+  }
+  .search-intro {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .search-intro > span {
+    display: none;
+  }
+  .search-form input {
+    width: 0;
+    min-width: 0;
+    font-size: 14px;
+  }
+  .search-submit {
+    font-size: 12px;
+    padding: 0 12px;
+    letter-spacing: 0;
+  }
+  .search-icon {
+    margin-right: 7px;
+  }
+  .popular {
+    gap: 6px;
+  }
+  .popular > span {
+    font-size: 10px;
+  }
+  .popular button {
+    padding: 3px 7px;
+  }
+  .content-grid {
+    display: block;
+  }
+  .sidebar {
+    display: none;
+  }
+  .item {
+    padding: 15px 3px;
+    gap: 12px;
+  }
+  .item-image {
+    width: 52px;
+    min-width: 52px;
+    height: 59px;
+  }
+  .item-title strong {
+    font-size: 13px;
+  }
+  .item-description {
+    font-size: 11px;
+  }
+  .section-heading h2 {
+    font-size: 20px;
+  }
+  .item-filters {
+    gap: 5px;
+  }
+  .item-filters button {
+    padding: 5px 9px;
+  }
+  .notebook {
+    padding: 3px 6px;
+  }
+  .notebook-top {
+    display: block;
+  }
+  .notebook-search {
+    flex-wrap: wrap;
+  }
+  .notebook-search input {
+    flex-basis: 100%;
+  }
+  .notebook-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .notebook-tabs button {
+    white-space: nowrap;
+    padding: 8px 13px;
+  }
+  .notebook-card {
+    padding: 15px;
+  }
+  .notebook-card-actions {
+    gap: 12px;
+  }
+  .notebook-card-actions label {
+    width: 100%;
+    margin: 0;
+  }
+  .compare-toolbar {
+    gap: 8px;
+    align-items: center;
+  }
+  .compare-toolbar > span {
+    width: 100%;
+  }
+  .notebook-card h3 {
+    font-size: 17px;
+  }
+  .masthead {
+    min-height: 160px;
+    padding: 27px 23px;
+    background-position: 60% center;
+  }
+  .masthead h1 {
+    font-size: 29px;
+  }
+  .masthead p {
+    font-size: 9px;
+  }
+  .site {
+    width: 98%;
+    margin: 8px auto 25px;
+  }
+  .site-grid {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 19px;
+  }
+  .site-grid aside {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 11px;
+    width: 100%;
+  }
+  .site-grid aside .profile {
+    grid-row: span 2;
+  }
+  .site-grid aside section {
+    padding: 12px;
+  }
+  .site-grid aside .calendar {
+    display: none;
+  }
+  .site-grid main {
+    width: 100%;
+    min-height: 350px;
+  }
+  .site-nav {
+    padding-left: 0;
+  }
+  .site-nav a {
+    padding: 10px 16px;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+  .site-grid main > h2 {
+    font-size: 22px;
+  }
+  .reading-pane {
+    padding: 19px;
+  }
+  .reading-pane h2 {
+    font-size: 23px;
+  }
+  .entry-prose p {
+    font-size: 14px;
+  }
+  .image-tools {
+    gap: 7px;
+  }
+  .timeline-tool,
+  .cabinet-box,
+  .comparison-tool,
+  .chain-box {
+    padding: 17px;
+  }
+  .timeline-tool label {
+    font-size: 11px !important;
+  }
+  .event-grip {
+    display: none;
+  }
+  .event-controls button {
+    padding: 7px 9px;
+  }
+  .compare-selectors {
+    display: block;
+  }
+  .comparison-columns {
+    display: block;
+  }
+  .comparison-columns article {
+    margin: 12px 0;
+  }
+  .comparison-table {
+    display: block;
+    overflow-x: auto;
+  }
+  dialog {
+    padding: 0;
+    max-width: 96%;
+    width: 96%;
+  }
+  #modal-body {
+    padding: 20px;
+  }
+  .notice {
+    margin: 14px 0;
+  }
+  .notebook-top .text-link {
+    margin-top: 8px;
+  }
+  .board-bottom {
+    font-size: 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* 覆盖旧门户目录的高优先级尺寸规则。 */
+.section-heading .eyebrow{display:block;margin-bottom:4px}#results .item .item-image{width:63px;min-width:63px;height:66px;min-height:66px;border:1px solid #d4e0e8;place-content:center;background:#eef3f7}.item .item-body{padding:0}.item-description{white-space:normal}.site .entry-list h3 button{background:transparent;border:0;box-shadow:none}.site .entry-list h3 button:hover{background:transparent;color:#82936a}.site .image-link:focus-visible{outline-offset:1px}@media(max-width:650px){#results .item .item-image{width:52px;min-width:52px;height:59px;min-height:59px}.section-heading .eyebrow{font-size:8px}.search-submit span{padding-left:7px}}

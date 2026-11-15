@@ -64,7 +64,7 @@
       }
     };
     let active = "journal",
-      pair = ["", ""],
+      pair = store.read().danny.pair.slice(),
       transitionTimer = null,
       composing = false,
       lastReadKey = "";
@@ -75,7 +75,8 @@
         !!f?.tab &&
         (f.access === "guest" ||
           (staff() &&
-            (f.access === "staff" ||
+            ((f.access === "staff" &&
+              (key !== "conversation" || flag("timeline"))) ||
               (f.access === "archive" &&
                 flag("cabinet") &&
                 (key !== "clause" || flag("compared"))))))
@@ -107,16 +108,16 @@
       });
     }
     const body = (f) =>
-      `${f.fields?.length ? `<dl class="record-fields">${f.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${f.image ? `<a class="image-link" href="${esc(f.image)}" target="_blank" rel="noopener"><img src="${esc(f.image)}" alt="${esc(f.title)}"></a>` : ""}<div class="entry-prose">${(f.body || []).map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
+      `${f.fields?.length ? `<dl class="record-fields">${f.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${f.image ? `<div class="image-viewer"><div class="image-tools"><span>扫描附件</span><button type="button" data-zoom="-1" aria-label="缩小图片">－</button><span class="zoom-level">100%</span><button type="button" data-zoom="1" aria-label="放大图片">＋</button><a href="${esc(f.image)}" target="_blank" rel="noopener">原图 ↗</a></div><div class="image-viewport"><a class="image-link" href="${esc(f.image)}" target="_blank" rel="noopener"><img src="${esc(f.image)}" alt="${esc(f.title)}"></a></div></div>` : ""}<div class="entry-prose">${(f.body || []).map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
     function listing(entries) {
       return entries.length
-        ? `<div class="entry-list">${entries.map((f) => `<article><span class="entry-date">${esc(f.date || "旧存档")} · ${esc(f.author || "Danny")} · ${esc(f.kind === "image" ? "相片" : "文字")}</span><h3><button data-read="${esc(f.key)}">${esc(f.title)}</button></h3><p>${esc(f.summary)}</p></article>`).join("")}</div>`
+        ? `<div class="entry-list">${entries.map((f) => `<article class="${has(f.id) ? "is-read" : ""}"><span class="entry-date">${esc(f.date || "旧存档")} · ${esc(f.author || "Danny")} · ${esc(f.kind === "image" ? "相片" : "文字")}<span class="read-marker" ${has(f.id) ? "" : "hidden"}>已读</span></span><h3><button data-read="${esc(f.key)}">${esc(f.title)}</button></h3><p>${esc(f.summary)}</p></article>`).join("")}</div>`
         : '<p class="quiet-empty">没有找到可查阅的记录。</p>';
     }
     function reader() {
       return '<article id="reading-pane" class="reading-pane" tabindex="-1" hidden></article>';
     }
-    function read(key) {
+    function read(key, { remember = true, focus = true } = {}) {
       if (!canRead(key)) {
         status("此材料尚不在当前可查阅范围。");
         return;
@@ -127,15 +128,50 @@
         $("#site-main").insertAdjacentHTML("beforeend", reader());
       const pane = $("#reading-pane");
       pane.hidden = false;
+      $("#site-main").classList.toggle(
+        "split-reading",
+        ["journal", "photos", "guestbook", "search"].includes(active),
+      );
       pane.innerHTML = `<div class="reading-head"><span>${esc(f.source)}</span><button id="close-reading">收起</button></div><h2>${esc(f.title)}</h2>${body(f)}${["door-front", "door-back"].includes(key) ? `<button data-read="${key === "door-front" ? "door-back" : "door-front"}" class="flip-photo">${key === "door-front" ? "翻到背面" : "翻回正面"}</button>` : ""}${key === "intake" ? '<p><a href="index.html#application">原登记系统 / 人员申请附件</a></p>' : ""}<p class="save-note">本份材料已保存在“我的”。</p>`;
-      store.collect(f);
+      store.collect({ ...f, url: "danny.html#" + f.tab + "--" + f.id });
+      const row = d
+        .querySelector('.entry-list [data-read="' + key + '"]')
+        ?.closest("article");
+      if (row) {
+        row.classList.add("is-read");
+        row.querySelector(".read-marker").hidden = false;
+      }
+      if (remember) {
+        const target = "#" + active + "--" + f.id;
+        if (w.location.hash !== target) w.history.pushState(null, "", target);
+      }
       if (key === "intake") store.collect(files.anomaly);
       status("已保存：" + f.title);
-      pane.focus({ preventScroll: true });
-      pane.scrollIntoView?.({ block: "nearest" });
+      if (focus) {
+        pane.focus({ preventScroll: true });
+        pane.scrollIntoView?.({ block: "nearest" });
+      }
     }
     function account() {
       return `<h2>个人站账户</h2>${staff() ? '<p>已建立员工会话。公开随记仍可照常浏览，馆务镜像保存在工作匣。</p><a href="#work" data-tab="work">打开工作匣</a>' : `<p>游客可以阅读公开随记、相册和旧留言。工作匣沿用馆务员工账户。</p><form id="login-form"><label>员工账号<input name="account" required maxlength="60" autocomplete="off" spellcheck="false"></label><label>口令<input name="password" type="password" required maxlength="60" autocomplete="off"></label><button>建立员工会话</button></form><p id="login-status" role="status"></p><details class="personal-reminder"><summary>本人留存的口令备忘</summary><p>四行雨的开头，接第一次正式开门的那天。字母小写，日期只留月日四位，连着写。</p><p class="fine">照片背面别丢了。工牌上的数字已经不用。</p></details>`}<label class="check"><input id="reduced-effects" type="checkbox" ${store.read().settings.reduced ? "checked" : ""}> 减少页面突变效果</label><p class="fine">虚构账号谜题，请勿输入现实账号或口令。员工会话仅保留在当前浏览器标签页。</p>`;
+    }
+    function timelineTool() {
+      const saved = store.read().danny;
+      return `<section class="timeline-tool"><div class="tool-heading"><span>LOG REPAIR / 2019.11.03</span><h3>校订值勤流水</h3></div><p>会话包未能自动合并。请按当班实际发生的先后重新编排，取消不属于这一天的记录。时间需以馆钟统一。</p><ol id="timeline-events">${saved.timeline.map((id, i) => `<li draggable="true" data-event="${id}"><span class="event-grip" aria-hidden="true">⠿</span><label><input type="checkbox" data-include="${id}" ${saved.included.includes(id) ? "checked" : ""}><span>${w.DANNY_TIMELINE.events.find((e) => e.id === id).label}</span></label><span class="event-controls"><button type="button" data-move="${id}" data-direction="-1" aria-label="上移记录" ${i === 0 ? "disabled" : ""}>↑</button><button type="button" data-move="${id}" data-direction="1" aria-label="下移记录" ${i === saved.timeline.length - 1 ? "disabled" : ""}>↓</button></span></li>`).join("")}</ol><button type="button" id="check-timeline">${flag("timeline") ? "重新核对排列" : "校订并合并会话包"}</button><p id="timeline-status" role="status">${flag("timeline") ? "会话包已恢复，正文保存在工作匣中。" : ""}</p>${flag("timeline") ? '<button data-read="conversation">打开修复的查询会话</button>' : ""}</section>`;
+    }
+    function moveEvent(id, beforeId, delta) {
+      store.update((state) => {
+        const order = state.danny.timeline,
+          from = order.indexOf(id);
+        if (from < 0) return;
+        const to = beforeId ? order.indexOf(beforeId) : from + delta;
+        if (to < 0 || to >= order.length || to === from) return;
+        order.splice(from, 1);
+        order.splice(to, 0, id);
+      });
+      route("work");
+      const button = d.querySelector('[data-move="' + id + '"]');
+      button?.focus({ preventScroll: true });
     }
     function cabinetForm() {
       return `<section class="cabinet-box"><h3>馆务镜像 / 旧柜检索</h3><p>部分纸本材料尚未编入目录。按旧柜标签调取。</p><form id="cabinet-form"><label>旧柜编号<input name="code" required maxlength="16" autocomplete="off"></label><button>调取</button></form><p id="cabinet-status" role="status"></p>${flag("cabinet") ? '<a href="#archive" data-tab="archive">打开已调取的旧柜</a>' : ""}</section>`;
@@ -157,7 +193,8 @@
           "",
         )}</fieldset><button>保存字段核对</button></form><p id="difference-status" role="status"></p>${flag("compared") ? '<button data-read="clause">查阅移交附则</button>' : ""}</section><section class="chain-box"><h3>附页关系登记</h3><p>签收凭据和后续登记之间有一处相同的人员标识。按原字段填写，不必写整句推测。</p><form id="chain-form"><label>签收凭据中的签收人<input name="signer" required maxlength="80" autocomplete="off"></label><label>后续登记中的物品名称<input name="subject" required maxlength="80" autocomplete="off"></label><label>特殊认领移交的事项<input name="inheritance" required maxlength="80" autocomplete="off"></label><button>核对关联</button></form><p id="chain-status" role="status"></p><div id="truth-result" ${flag("verified") ? "" : "hidden"}>${flag("verified") ? body(files.truth) + '<a href="index.html#application">返回找回网 / 待决定的申请</a>' : ""}</div></section>${reader()}`;
     }
-    function route(tab) {
+    function route(target) {
+      const [tab, entryId] = String(target).split("--");
       active = [
         "journal",
         "photos",
@@ -170,12 +207,14 @@
         ? tab
         : "journal";
       chrome();
+      $("#site-main").classList.remove("split-reading");
       let html = "";
       if (active === "account") html = account();
       else if (active === "work")
         html = staff()
           ? '<h2>工作匣</h2><p class="fine">馆务镜像 / 私人草稿与值勤材料混存</p>' +
             listing(available().filter((f) => f.tab === "work")) +
+            timelineTool() +
             cabinetForm() +
             reader()
           : '<h2>工作匣</h2><p>这部分没有开放给游客。</p><a href="#account" data-tab="account">账户入口</a>';
@@ -200,9 +239,14 @@
         renderPair();
         transition();
       }
+      if (entryId) {
+        const key = Object.keys(files).find((key) => files[key].id === entryId);
+        if (key) read(key, { remember: false, focus: false });
+      }
     }
     function go(tab) {
-      if (w.location.hash !== "#" + tab) w.location.hash = tab;
+      if (w.location.hash !== "#" + tab)
+        w.history.pushState(null, "", "#" + tab);
       route(tab);
     }
     function renderPair() {
@@ -242,8 +286,38 @@
         go(b.dataset.tab);
       }
       if (b.dataset.read) read(b.dataset.read);
+      if (b.dataset.zoom) {
+        const viewer = b.closest(".image-viewer"),
+          img = viewer.querySelector("img");
+        const scale = Math.max(
+          1,
+          Math.min(
+            3,
+            (Number(viewer.dataset.scale) || 1) + Number(b.dataset.zoom) * 0.5,
+          ),
+        );
+        viewer.dataset.scale = scale;
+        img.style.width = scale * 100 + "%";
+        img.style.maxWidth = "none";
+        viewer.querySelector(".zoom-level").textContent = scale * 100 + "%";
+      }
+      if (b.dataset.move && staff())
+        moveEvent(b.dataset.move, null, Number(b.dataset.direction));
+      if (b.id === "check-timeline" && staff()) {
+        const saved = store.read().danny;
+        if (!w.DANNY_TIMELINE.check(saved.timeline, saved.included)) {
+          $("#timeline-status").textContent =
+            "当前排列不能合并。请核对记录所属日期，以及两种钟表之间的偏差。";
+          return;
+        }
+        store.mark("timeline");
+        route("work");
+        status("值勤流水校订完成，查询会话已恢复。");
+      }
       if (b.id === "close-reading") {
         $("#reading-pane").hidden = true;
+        $("#site-main").classList.remove("split-reading");
+        w.history.replaceState(null, "", "#" + active);
         const origin =
           d.querySelector('.entry-list [data-read="' + lastReadKey + '"]') ||
           $("#site-main");
@@ -262,13 +336,41 @@
         status("已退出员工模式。");
       }
     });
+    let dragged = null;
+    d.addEventListener("dragstart", (e) => {
+      const row = e.target.closest("[data-event]");
+      if (!row || !staff()) return;
+      dragged = row.dataset.event;
+      e.dataTransfer?.setData("text/plain", dragged);
+    });
+    d.addEventListener("dragover", (e) => {
+      if (dragged && e.target.closest("[data-event]")) e.preventDefault();
+    });
+    d.addEventListener("drop", (e) => {
+      const row = e.target.closest("[data-event]");
+      if (!row || !dragged || !staff()) return;
+      e.preventDefault();
+      moveEvent(dragged, row.dataset.event, 0);
+      dragged = null;
+    });
+    d.addEventListener("dragend", () => (dragged = null));
     d.addEventListener("change", (e) => {
+      if (e.target.dataset.include && staff()) {
+        store.update((s) => {
+          const ids = s.danny.included,
+            id = e.target.dataset.include;
+          s.danny.included = e.target.checked
+            ? [...new Set([...ids, id])]
+            : ids.filter((x) => x !== id);
+        });
+      }
       if (e.target.id === "reduced-effects") {
         store.update((s) => (s.settings.reduced = e.target.checked));
         if (e.target.checked) $("#archive-transition").hidden = true;
       }
       if (e.target.id === "compare-left" || e.target.id === "compare-right") {
         pair[e.target.id === "compare-left" ? 0 : 1] = e.target.value;
+        store.update((s) => (s.danny.pair = pair.slice()));
         renderPair();
       }
     });
@@ -277,6 +379,7 @@
       if (f.id === "site-search-form") {
         e.preventDefault();
         if (!composing) {
+          store.update((s) => (s.danny.query = $("#site-search").value.trim()));
           go("search");
           status("站内查找：" + $("#site-search").value.trim());
         }
@@ -340,9 +443,13 @@
       if (f.id === "chain-form") {
         e.preventDefault();
         if (!staff() || !flag("cabinet")) return;
-        if (!flag("compared") || !["signed", "relist", "clause"].every(has)) {
+        if (
+          !flag("compared") ||
+          !flag("timeline") ||
+          !["signed", "relist", "clause", "conversation"].every(has)
+        ) {
           $("#chain-status").textContent =
-            "原始材料尚未核对完整。请读凭据、后续登记和移交附则。";
+            "原始材料尚未核对完整。请读凭据、后续登记、移交附则，以及校订后恢复的会话。";
           return;
         }
         if (
@@ -370,8 +477,7 @@
       () => (composing = false),
     );
     w.addEventListener("hashchange", () => {
-      const tab = w.location.hash.slice(1);
-      if (tab !== active) route(tab);
+      route(w.location.hash.slice(1));
     });
     w.addEventListener("storage", (e) => {
       if (e.key === store.key) {
@@ -380,9 +486,10 @@
             w.sessionStorage.removeItem("harrow-session");
           } catch {}
         }
-        route(active);
+        route(w.location.hash.slice(1) || active);
       }
     });
+    $("#site-search").value = store.read().danny.query;
     store.collect(files.trace);
     store.mark("trace");
     route(w.location.hash.slice(1) || "journal");

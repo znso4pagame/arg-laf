@@ -21,6 +21,14 @@
     introduced: false,
     goal: "",
     lastQuery: "",
+    searchHistory: [],
+    searchCursor: -1,
+    danny: {
+      query: "",
+      pair: ["", ""],
+      timeline: ["draft", "test", "door", "keys", "reply", "wall"],
+      included: ["draft", "test", "door", "keys", "reply", "wall"],
+    },
     ending: "",
     name: "",
     flags: [],
@@ -68,6 +76,38 @@
     state.introduced = raw.introduced === true;
     state.goal = text(raw.goal, 60);
     state.lastQuery = text(raw.lastQuery, 80);
+    state.searchHistory = Array.isArray(raw.searchHistory)
+      ? raw.searchHistory
+          .filter((x) => typeof x === "string" && x.trim())
+          .slice(-12)
+          .map((x) => text(x, 80))
+      : [];
+    state.searchCursor = Math.min(
+      state.searchHistory.length - 1,
+      Math.max(
+        -1,
+        Number.isInteger(raw.searchCursor)
+          ? raw.searchCursor
+          : state.searchHistory.length - 1,
+      ),
+    );
+    const allowedPair = ["municipalA", "municipalB", "renovation", "inventory"];
+    state.danny.query = text(raw.danny?.query, 80);
+    state.danny.pair = [0, 1].map((i) =>
+      allowedPair.includes(raw.danny?.pair?.[i]) ? raw.danny.pair[i] : "",
+    );
+    const eventIds = ["draft", "test", "door", "keys", "reply", "wall"];
+    if (
+      Array.isArray(raw.danny?.timeline) &&
+      raw.danny.timeline.length === 6 &&
+      new Set(raw.danny.timeline).size === 6 &&
+      raw.danny.timeline.every((id) => eventIds.includes(id))
+    )
+      state.danny.timeline = raw.danny.timeline.slice();
+    if (Array.isArray(raw.danny?.included))
+      state.danny.included = [
+        ...new Set(raw.danny.included.filter((id) => eventIds.includes(id))),
+      ];
     state.ending = ["claimed", "left"].includes(raw.ending) ? raw.ending : "";
     state.name = text(raw.name, 30);
     state.flags = Array.isArray(raw.flags)
@@ -81,6 +121,7 @@
                 "compared",
                 "verified",
                 "scare-seen",
+                "timeline",
               ].includes(x),
             ),
           ),

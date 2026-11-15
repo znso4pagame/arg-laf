@@ -25,10 +25,10 @@
   function matches(query, records) {
     const q = fold(query).slice(0, 80);
     if (!q) return records.slice();
-    const expanded = groups
+    const facets = groups
       .filter((group) => group.some((term) => q.includes(fold(term))))
-      .flat()
-      .map(fold);
+      .map((group) => group.map(fold));
+    const loose = String(query).trim().split(/\s+/).map(fold).filter(Boolean);
     return records
       .map((entry, index) => {
         const text = fold(
@@ -40,8 +40,10 @@
             entry.place,
             entry.description,
             entry.summary,
+            entry.note,
+            entry.source,
             ...(entry.keywords || []),
-            ...(entry.body || []),
+            ...(Array.isArray(entry.body) ? entry.body : [entry.body]),
             ...(entry.fields || []).flat(),
           ]
             .filter(Boolean)
@@ -49,7 +51,20 @@
         );
         const score = text.includes(q)
           ? 100
-          : expanded.some((term) => text.includes(term))
+          : facets.length &&
+              facets.every((group) =>
+                group.some((term) => text.includes(term)),
+              ) &&
+              (loose.length < 2 ||
+                loose.every(
+                  (term) =>
+                    text.includes(term) ||
+                    facets.some(
+                      (group) =>
+                        group.includes(term) &&
+                        group.some((alias) => text.includes(alias)),
+                    ),
+                ))
             ? 40
             : 0;
         return { entry, index, score };

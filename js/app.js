@@ -19,6 +19,10 @@
     );
   let mineFilter = "all",
     selected = [],
+    mineQuery = "",
+    deletedNotes = [],
+    itemCategory = "all",
+    currentNav = "home",
     pendingChoice = null,
     toastTimer;
   const has = (id) => store.read().clues.some((c) => c.id === id);
@@ -29,11 +33,20 @@
     message: "留言",
     note: "个人推测",
   };
-  function toast(message) {
+  function toast(message, undo = false) {
     clearTimeout(toastTimer);
     $("#toast").textContent = message;
+    if (undo) {
+      const button = document.createElement("button");
+      button.id = "undo-note";
+      button.textContent = "撤销";
+      $("#toast").append(button);
+    }
     $("#toast").hidden = false;
-    toastTimer = setTimeout(() => ($("#toast").hidden = true), 2600);
+    toastTimer = setTimeout(
+      () => ($("#toast").hidden = true),
+      undo ? 15000 : 2600,
+    );
   }
   function modal(title, html) {
     $("#modal-label").textContent = title;
@@ -61,11 +74,19 @@
     document.querySelectorAll(".nav").forEach((b) => {
       const active =
         b.dataset.nav ===
-        (document.body.classList.contains("notebook-mode") ? "mine" : "home");
+        (document.body.classList.contains("notebook-mode")
+          ? "mine"
+          : currentNav);
       b.classList.toggle("active", active);
     });
     const n = $("#my-count");
     if (n) n.textContent = String(s.clues.length + s.notes.length);
+    const eyebrow = $(".section-heading .eyebrow");
+    if (eyebrow)
+      eyebrow.textContent = document.body.classList.contains("notebook-mode")
+        ? "PERSONAL ARCHIVE / 已取得材料"
+        : "PUBLIC RECORDS / 公开拾物登记";
+    historyChrome();
   }
   function clearMatch() {
     $("#clue-match").hidden = true;
@@ -113,19 +134,45 @@
   function whisper() {
     const s = store.read();
     if (s.ending || !has("anomaly")) return;
+    const q = matcher.fold($("#search").value);
     const stage = s.flags.includes("verified")
-        ? "truth"
+      ? "truth"
+      : has("conversation")
+        ? "cache"
         : s.flags.includes("staff")
           ? "staff"
-          : "first",
-      id = "whisper-" + stage;
+          : "first";
+    const context =
+      stage === "truth"
+        ? "truth"
+        : /danny|上一个|草稿|他问/.test(q) && has("draft")
+          ? "danny"
+          : /小鹿|客服|你是谁/.test(q)
+            ? "identity"
+            : q === matcher.fold(s.goal) || /我的东西|我的失物/.test(q)
+              ? "property"
+              : "arrival";
+    const id = "whisper-" + context + "-" + stage;
+    if (
+      stage === "truth" &&
+      s.clues.some((c) => c.id.startsWith("whisper-truth"))
+    )
+      return;
     if (has(id)) return;
     const words =
       stage === "truth"
         ? ["我没有找到你的东西。", "我只是想离开。", "你自己选。"]
-        : stage === "staff"
-          ? ["你能看到旧档了。", "我还在等。"]
-          : ["我是小鹿。", "我改不了正文。", "旧附件还在。"];
+        : context === "identity"
+          ? ["我是小鹿。", "B3 没有白天。", "我只能碰到这里。"]
+          : context === "danny"
+            ? stage === "cache"
+              ? ["他问过同样的问题。", "后来就没有输入了。"]
+              : ["他把记录留下了。", "我不知道他现在在哪。"]
+            : context === "property"
+              ? ["要先通过审核。", "我才能替你查。"]
+              : stage === "first"
+                ? ["我是小鹿。", "旧记录还在。"]
+                : ["你看到旧档了。", "我还在等。"];
     $("#suggestions").hidden = false;
     $("#suggestions").innerHTML = words
       .map((t) => `<div class="suggestion-response">${esc(t)}</div>`)
@@ -136,23 +183,61 @@
       title:
         stage === "truth"
           ? "查询建议里的最后几句话"
-          : "异常查询建议 / " + (stage === "staff" ? "员工站之后" : "最初"),
+          : "异常查询建议 / " +
+            (context === "arrival"
+              ? "来访"
+              : context === "property"
+                ? "失物"
+                : context === "identity"
+                  ? "身份"
+                  : "Danny"),
       source: "找回网 · 实际显示的查询建议",
       body: words,
       summary: words[0],
     });
     updateChrome();
   }
+  const iconPaths = {
+    钱包: "M5 8h23v19H5z M5 8V5h20v3 M20 15h8v7h-8z",
+    钥匙: "M17 10a6 6 0 1 1-12 0a6 6 0 1 1 12 0 M15 14l13 13 M22 21l3-3 M25 24l3-3",
+    雨伞: "M3 15a13 13 0 0 1 26 0 M3 15q4-4 8 0q5-4 10 0q4-4 8 0 M16 15v11q0 5 5 2",
+    相机: "M4 10h24v17H4z M10 10l2-5h8l2 5 M21 18a5 5 0 1 1-10 0a5 5 0 1 1 10 0",
+    旧书: "M3 6q7-3 13 1q6-4 13-1v21q-7-3-13 1q-6-4-13-1z M16 7v21",
+    证件: "M6 4h20v24H6z M11 11a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M9 21q5-8 10 0 M22 10h1 M21 15h2 M21 20h2",
+    耳机: "M5 22v-7a11 11 0 0 1 22 0v7 M5 15h5v12H5z M22 15h5v12h-5z",
+    水杯: "M8 4h16v25H8z M8 8h16 M24 11h3v10h-3",
+    文件: "M7 3h13l6 6v20H7z M20 3v7h6 M11 15h11 M11 20h11 M11 25h7",
+  };
   function card(item) {
-    return `<button class="item" data-item="${esc(item.id)}"><span class="item-image"><span class="portal-item-symbol" aria-hidden="true">${item.type === "钱包" ? "▣" : item.type === "钥匙" ? "⚿" : "▤"}</span></span><span class="item-body"><span class="item-title"><strong>${esc(item.name)}</strong><span class="badge">待认领</span></span><span class="item-description">${esc(item.description)}</span><span class="item-meta"><span>${esc(item.place)}</span><span>${esc(item.date)}</span></span></span></button>`;
+    const path = iconPaths[item.type] || iconPaths.文件;
+    return `<button class="item" data-item="${esc(item.id)}"><span class="item-image"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="item-register-id">${esc(item.id)}</span></span><span class="item-body"><span class="item-title"><strong>${esc(item.name)}</strong><span class="badge">待认领</span></span><span class="item-description">${esc(item.description)}</span><span class="item-meta"><span>${esc(item.place)}</span><span>${esc(item.date)}</span></span></span></button>`;
   }
   function renderResults(query = "") {
     const s = store.read(),
       q = matcher.fold(query);
-    const items = searchIndex.matches(query, [
-      ...s.registrations,
-      ...data.items,
-    ]);
+    const items = searchIndex
+      .matches(query, [...s.registrations, ...data.items])
+      .filter(
+        (item) =>
+          itemCategory === "all" ||
+          (
+            {
+              personal: [
+                "钱包",
+                "钥匙",
+                "耳机",
+                "雨伞",
+                "围巾",
+                "相机",
+                "水杯",
+                "收音机",
+                "纸袋",
+              ],
+              papers: ["证件", "票根", "文件", "明信片"],
+              books: ["旧书"],
+            }[itemCategory] || []
+          ).includes(item.type),
+      );
     const clues = s.clues.filter(
       (x) => q && matcher.fold(x.title + x.id + x.summary).includes(q),
     );
@@ -173,21 +258,59 @@
       html =
         `<article class="record"><h3>${esc(s.name)} / 客服 0001</h3><p>状态：待认领。岗位已经移交。</p></article>` +
         html;
-    $("#results").innerHTML = html;
+    const filters = `<div class="item-filters" role="group" aria-label="物品类别">${[
+      ["all", "全部登记"],
+      ["personal", "随身物品"],
+      ["papers", "证件票据"],
+      ["books", "书籍资料"],
+    ]
+      .map(
+        ([id, name]) =>
+          `<button data-item-category="${id}" aria-pressed="${itemCategory === id}">${name}</button>`,
+      )
+      .join("")}</div>`;
+    $("#results").innerHTML = filters + html;
     renderApplication();
   }
-  function search(query) {
+  function historyChrome() {
+    const s = store.read(),
+      history = s.searchHistory;
+    $("#history-panel").hidden = !history.length;
+    $("#history-list").innerHTML = history
+      .slice()
+      .reverse()
+      .map((q) => `<button data-search="${esc(q)}">${esc(q)}</button>`)
+      .join("");
+    $("#query-navigation").hidden =
+      document.body.classList.contains("notebook-mode") ||
+      !$("#search").value ||
+      history.length < 2;
+    $("#query-back").disabled = s.searchCursor <= 0;
+    $("#query-forward").disabled = s.searchCursor >= history.length - 1;
+    $("#query-position").textContent = history.length
+      ? `${s.searchCursor + 1} / ${history.length}`
+      : "";
+  }
+  function search(query, { record = true } = {}) {
     query = String(query).trim().slice(0, 80);
     if (!query) {
       $("#search").focus();
       return;
     }
     document.body.classList.remove("notebook-mode");
+    itemCategory = "all";
+    currentNav = "all";
     clearMatch();
     $("#search").value = query;
     $("#suggestions").hidden = true;
     store.update((s) => {
       s.lastQuery = query;
+      if (record && s.searchHistory[s.searchCursor] !== query) {
+        s.searchHistory = s.searchHistory.slice(0, s.searchCursor + 1);
+        s.searchHistory.push(query);
+        s.searchHistory = s.searchHistory.slice(-12);
+        s.searchCursor = s.searchHistory.length - 1;
+      }
       if (!s.goal && !/^(你好|谢谢|天气|系统)$/.test(query)) s.goal = query;
     });
     renderResults(query);
@@ -195,7 +318,10 @@
     whisper();
     matchInput(query, { submitted: true });
   }
-  function home() {
+  function home({ remember = true, section = "home" } = {}) {
+    itemCategory = "all";
+    currentNav = section;
+    if (remember) store.update((s) => (s.lastQuery = ""));
     document.body.classList.remove("notebook-mode");
     $("#search").value = "";
     $("#suggestions").hidden = true;
@@ -221,14 +347,17 @@
     const s = store.read();
     $("#results-title").textContent = "我的 · 已收集线索";
     $("#result-meta").hidden = true;
-    const entries = s.clues.filter(
-      (c) =>
-        mineFilter === "all" ||
-        (mineFilter === "starred" && c.starred) ||
-        c.kind === mineFilter,
-    );
+    const entries = searchIndex
+      .matches(mineQuery, s.clues)
+      .filter(
+        (c) =>
+          mineFilter === "all" ||
+          (mineFilter === "starred" && c.starred) ||
+          c.kind === mineFilter,
+      );
+    const notes = searchIndex.matches(mineQuery, s.notes);
     $("#results").innerHTML =
-      `<section class="notebook"><div class="notebook-top"><p>这里保存已经取得的材料。个人备注仅代表推测，不会自动解锁剧情。</p><button class="text-link" id="notebook-return">返回查阅 &gt;&gt;</button></div><div class="notebook-tabs">${[
+      `<section class="notebook"><div class="notebook-top"><p>这里保存已经取得的材料。个人备注仅代表推测，不会自动解锁剧情。</p><button class="text-link" id="notebook-return">返回查阅 &gt;&gt;</button></div><form id="notebook-search-form" class="notebook-search"><label class="sr-only" for="notebook-search">搜索收藏与备注</label><input id="notebook-search" value="${esc(mineQuery)}" placeholder="搜索标题、正文、字段和自己的备注" maxlength="80"><button>查找材料</button>${mineQuery ? '<button type="button" id="clear-notebook-search">清除筛选</button>' : ""}</form><div class="notebook-tabs">${[
         ["all", "全部"],
         ["page", "页面"],
         ["record", "档案"],
@@ -243,7 +372,7 @@
         )
         .join(
           "",
-        )}</div><div class="compare-toolbar"><span id="compare-count">已选 ${selected.length} / 2 份材料</span><button id="compare-files" ${selected.length !== 2 ? "disabled" : ""}>并排对照</button><button id="new-note">写一条笔记</button></div>${mineFilter !== "note" ? entries.map((c) => `<article class="notebook-card"><div class="notebook-card-head"><span>${label[c.kind]}</span><button data-star="${esc(c.id)}" aria-pressed="${c.starred}">${c.starred ? "★ 已标重点" : "☆ 标记重点"}</button></div><h3>${esc(c.title)}</h3><p>${esc(c.summary)}</p><small>来源：${esc(c.source)}</small>${c.note ? `<blockquote>我的备注：${esc(c.note)}</blockquote>` : ""}<div class="notebook-card-actions"><button data-file="${esc(c.id)}">查看副本 / 备注</button>${c.url ? `<a href="${esc(c.url)}">来源页面 &gt;&gt;</a>` : ""}<label><input type="checkbox" data-compare="${esc(c.id)}" ${selected.includes(c.id) ? "checked" : ""}> 选入对照</label></div></article>`).join("") : ""}${["all", "note", "starred"].includes(mineFilter) && mineFilter !== "starred" ? s.notes.map((n) => `<article class="notebook-card personal-note"><span>个人推测</span><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p></article>`).join("") : ""}${!(mineFilter === "note" ? s.notes.length : entries.length + (mineFilter === "all" ? s.notes.length : 0)) ? '<div class="empty"><h3>这个分类还没有材料</h3><p>保存公开登记或阅读站内附件，取得的材料会出现在这里。</p></div>' : ""}</section>`;
+        )}</div><div class="compare-toolbar"><span id="compare-count">已选 ${selected.length} / 2 份材料</span><button id="compare-files" ${selected.length !== 2 ? "disabled" : ""}>并排对照</button><button id="new-note">写一条笔记</button><button id="export-notebook">导出线索与笔记</button></div>${mineFilter !== "note" ? entries.map((c) => `<article class="notebook-card"><div class="notebook-card-head"><span>${label[c.kind]}</span><button data-star="${esc(c.id)}" aria-pressed="${c.starred}">${c.starred ? "★ 已标重点" : "☆ 标记重点"}</button></div><h3>${esc(c.title)}</h3><p>${esc(c.summary)}</p><small>来源：${esc(c.source)}</small>${c.note ? `<blockquote>我的备注：${esc(c.note)}</blockquote>` : ""}<div class="notebook-card-actions"><button data-file="${esc(c.id)}">查看副本 / 备注</button>${c.url ? `<a href="${esc(c.url)}">来源页面 &gt;&gt;</a>` : ""}<label><input type="checkbox" data-compare="${esc(c.id)}" ${selected.includes(c.id) ? "checked" : ""}> 选入对照</label></div></article>`).join("") : ""}${["all", "note", "starred"].includes(mineFilter) && mineFilter !== "starred" ? notes.map((n) => `<article class="notebook-card personal-note"><span>个人推测</span><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p><div class="notebook-card-actions"><button data-edit-note="${esc(n.id)}">修改笔记</button><button data-delete-note="${esc(n.id)}">移除笔记</button></div></article>`).join("") : ""}${!(mineFilter === "note" ? notes.length : entries.length + (mineFilter === "all" ? notes.length : 0)) ? '<div class="empty"><h3>这个分类还没有材料</h3><p>保存公开登记或阅读站内附件，取得的材料会出现在这里。</p></div>' : ""}</section>`;
     updateChrome();
   }
   function compare() {
@@ -272,10 +401,74 @@
       if ($("#modal").open) $("#modal").close();
       search(b.dataset.search);
     }
+    if (b.id === "query-back" || b.id === "query-forward") {
+      const s = store.read(),
+        cursor = s.searchCursor + (b.id === "query-back" ? -1 : 1);
+      if (cursor >= 0 && cursor < s.searchHistory.length) {
+        store.update((x) => (x.searchCursor = cursor));
+        search(s.searchHistory[cursor], { record: false });
+      }
+    }
+    if (b.id === "clear-notebook-search") {
+      mineQuery = "";
+      renderMine();
+    }
+    if (b.dataset.editNote) {
+      const n = store.read().notes.find((n) => n.id === b.dataset.editNote);
+      if (n)
+        modal(
+          "我的 · 修改笔记",
+          `<h2>修改个人推测</h2><form id="edit-note-form" data-id="${esc(n.id)}" class="register-form"><label>标题<input name="title" required maxlength="80" value="${esc(n.title)}"></label><label>内容<textarea name="body" required maxlength="3000">${esc(n.body)}</textarea></label><button class="record-action">保存修改</button></form>`,
+        );
+    }
+    if (b.dataset.deleteNote) {
+      const n = store.read().notes.find((n) => n.id === b.dataset.deleteNote);
+      if (n) {
+        deletedNotes.push(n);
+        store.update((s) => (s.notes = s.notes.filter((x) => x.id !== n.id)));
+        renderMine();
+        toast("笔记已移除。", true);
+      }
+    }
+    if (b.id === "undo-note") {
+      const n = deletedNotes.pop();
+      if (n) {
+        store.update((s) => {
+          if (s.notes.length < 50 && !s.notes.some((x) => x.id === n.id))
+            s.notes.push(n);
+        });
+        renderMine();
+        toast("笔记已恢复。", !!deletedNotes.length);
+      }
+    }
+    if (b.id === "export-notebook") {
+      const s = store.read(),
+        snapshot = {
+          format: "zhaohui-notebook",
+          version: 1,
+          clues: s.clues,
+          notes: s.notes,
+        };
+      modal(
+        "导出线索与笔记",
+        `<h2>材料与个人笔记副本</h2><p>可复制保存为文本。这里只导出已取得的材料与备注。</p><textarea id="notebook-export" readonly aria-label="导出的线索与笔记">${esc(JSON.stringify(snapshot, null, 2))}</textarea><button id="select-export" class="record-action">全选导出内容</button>`,
+      );
+    }
+    if (b.id === "select-export") {
+      $("#notebook-export").focus();
+      $("#notebook-export").select();
+      toast("已全选，可以复制保存。");
+    }
+    if (b.dataset.itemCategory) {
+      itemCategory = b.dataset.itemCategory;
+      renderResults($("#search").value);
+      updateChrome();
+    }
     if (b.dataset.nav) {
       e.preventDefault();
       if (b.dataset.nav === "mine") renderMine();
-      else if (["home", "all"].includes(b.dataset.nav)) home();
+      else if (["home", "all"].includes(b.dataset.nav))
+        home({ section: b.dataset.nav });
       else if (b.dataset.nav === "guide")
         modal(
           "认领须知",
@@ -406,6 +599,8 @@
         sessionStorage.removeItem("harrow-session");
       } catch {}
       selected = [];
+      mineQuery = "";
+      deletedNotes = [];
       $("#modal").close();
       home();
       $("#intro").showModal();
@@ -433,6 +628,27 @@
   });
   document.addEventListener("submit", (e) => {
     const form = e.target;
+    if (form.id === "notebook-search-form") {
+      e.preventDefault();
+      mineQuery = $("#notebook-search").value.trim();
+      renderMine();
+    }
+    if (form.id === "edit-note-form") {
+      e.preventDefault();
+      const f = new FormData(form),
+        title = String(f.get("title")).trim(),
+        body = String(f.get("body")).trim();
+      if (!title || !body) return;
+      store.update((s) => {
+        const n = s.notes.find((n) => n.id === form.dataset.id);
+        if (n) {
+          n.title = title.slice(0, 80);
+          n.body = body.slice(0, 3000);
+        }
+      });
+      $("#modal").close();
+      renderMine();
+    }
     if (form.id === "search-form") {
       e.preventDefault();
       if (!composing) search($("#search").value);
@@ -521,21 +737,27 @@
     e.preventDefault();
     home();
   });
-  $("#show-all").addEventListener("click", home);
+  $("#show-all").addEventListener("click", () => home({ section: "all" }));
   $("#ending").addEventListener("cancel", (e) => {
     e.preventDefault();
     $("#ending").close();
   });
   window.addEventListener("storage", (e) => {
     if (e.key !== store.key) return;
-    document.body.classList.contains("notebook-mode") ? renderMine() : home();
+    if (document.body.classList.contains("notebook-mode")) renderMine();
+    else {
+      renderResults($("#search").value);
+      updateChrome();
+    }
   });
   $("#modal").addEventListener("close", () => {
     pendingChoice = null;
   });
-  home();
+  const savedQuery = store.read().lastQuery;
+  home({ remember: false });
   syncAssist();
-  if (store.read().lastQuery) search(store.read().lastQuery);
+  if (savedQuery)
+    search(savedQuery, { record: !store.read().searchHistory.length });
   if (location.hash === "#mine") renderMine();
   if (!store.read().introduced) $("#intro").showModal();
   if (
