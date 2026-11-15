@@ -29,7 +29,8 @@ function buildSite(destination = path.join(root, "_site")) {
     "js/data.js",
     "js/clue-matcher.js",
     "js/journey-store.js",
-    "js/harrow.js",
+    "js/danny.js",
+    "js/search-index.js",
   ];
   const manifest = {};
   for (const file of assets) {

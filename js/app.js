@@ -3,7 +3,8 @@
   const $ = (s) => document.querySelector(s),
     store = window.ZHAOHUI_JOURNEY,
     data = window.ZHAOHUI,
-    matcher = window.ZHAOHUI_MATCHER;
+    matcher = window.ZHAOHUI_MATCHER,
+    searchIndex = window.ZHAOHUI_SEARCH;
   const esc = (v) =>
     String(v ?? "").replace(
       /[&<>"']/g,
@@ -78,7 +79,7 @@
       ...data.items.map((x) => ({
         key: x.name,
         label: x.name,
-        forms: [x.type],
+        forms: [x.type, ...(x.keywords || [])],
         query: x.type,
       })),
       ...s.clues.map((x) => ({
@@ -148,22 +149,24 @@
   function renderResults(query = "") {
     const s = store.read(),
       q = matcher.fold(query);
-    const items = [...s.registrations, ...data.items].filter(
-      (x) => !q || matcher.fold(x.id + x.name + x.type + x.place).includes(q),
-    );
+    const items = searchIndex.matches(query, [
+      ...s.registrations,
+      ...data.items,
+    ]);
     const clues = s.clues.filter(
       (x) => q && matcher.fold(x.title + x.id + x.summary).includes(q),
     );
     $("#results-title").textContent = query ? "查询结果" : "最近拾获";
     $("#result-meta").hidden = !query;
     $("#result-meta").textContent =
-      `关键词：${query} · 仅检索公开记录和已收集材料`;
+      `关键词：${query} · ${items.length} 条公开登记 · ${clues.length} 份已收集材料`;
     let html = `<div class="items">${items.map(card).join("")}</div>`;
-    if (query && !s.ending && !/^(你好|谢谢|天气|系统)$/.test(query))
-      html += `<button class="item anomaly" data-anomaly><span class="item-image"><span class="portal-item-symbol">?</span></span><span class="item-body"><span class="item-title"><strong>未分类登记 / 0001</strong><span class="badge">信息不全</span></span><span class="item-description">帮帮我。</span><span class="item-meta">原始附件仍保留 · 可查修订记录</span></span></button>`;
+    const related = query ? searchIndex.related(items, query) : [];
+    if (related.length)
+      html += `<div class="related-queries"><span>相关查询</span>${related.map((q) => `<button data-search="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
     if (clues.length)
       html += `<div class="collected-search"><h3>我的已收集材料</h3>${clues.map((c) => `<button class="record-action" data-file="${esc(c.id)}">${esc(c.title)}</button>`).join("")}</div>`;
-    if (!items.length && !clues.length && (s.ending || !query))
+    if (!items.length && !clues.length)
       html =
         '<div class="empty"><h3>暂无匹配记录</h3><p>可以更换物品名称，或在“我的”回看已取得材料。</p></div>';
     if (s.ending === "claimed")
@@ -208,8 +211,8 @@
       panel.id = "application-panel";
       $(".content-grid").after(panel);
     }
-    panel.hidden = !s.flags.includes("staff") || !!s.ending;
-    panel.innerHTML = `<h2>特殊人员认领申请</h2><p>员工站附件关联到客服 0001 的人员认领。这不是你失物的领取单。${s.flags.includes("verified") ? "你已经完成归档关系核验。" : "资料尚未全部核对，可以继续调查后再决定。"}</p><a href="archive-room.html">回归档室核对材料 &gt;&gt;</a><form id="claim-form" class="claim-form"><label>认领对象<input value="小鹿 / 客服 0001" readonly></label><label>认领人姓名<input name="name" required maxlength="30" autocomplete="off"></label><label class="claim-terms">认领人承担该对象在系统中遗留的全部责任、义务与岗位职责。提交前将再次核对。</label><button class="record-action" type="submit">核对并准备签署</button><button class="text-link" type="button" id="leave">放弃本次认领</button></form>`;
+    panel.hidden = !s.flags.includes("staff") || !has("anomaly") || !!s.ending;
+    panel.innerHTML = `<h2>特殊人员认领申请</h2><p>员工站附件关联到客服 0001 的人员认领。这不是你失物的领取单。${s.flags.includes("verified") ? "你已经完成归档关系核验。" : "资料尚未全部核对，可以继续调查后再决定。"}</p><a href="danny.html#archive">回归档室核对材料 &gt;&gt;</a><form id="claim-form" class="claim-form"><label>认领对象<input value="小鹿 / 客服 0001" readonly></label><label>认领人姓名<input name="name" required maxlength="30" autocomplete="off"></label><label class="claim-terms">认领人承担该对象在系统中遗留的全部责任、义务与岗位职责。提交前将再次核对。</label><button class="record-action" type="submit">核对并准备签署</button><button class="text-link" type="button" id="leave">放弃本次认领</button></form>`;
   }
   function renderMine() {
     document.body.classList.add("notebook-mode");
@@ -240,7 +243,7 @@
         )
         .join(
           "",
-        )}</div><div class="compare-toolbar"><span id="compare-count">已选 ${selected.length} / 2 份材料</span><button id="compare-files" ${selected.length !== 2 ? "disabled" : ""}>并排对照</button><button id="new-note">写一条笔记</button></div>${mineFilter !== "note" ? entries.map((c) => `<article class="notebook-card"><div class="notebook-card-head"><span>${label[c.kind]}</span><button data-star="${esc(c.id)}" aria-pressed="${c.starred}">${c.starred ? "★ 已标重点" : "☆ 标记重点"}</button></div><h3>${esc(c.title)}</h3><p>${esc(c.summary)}</p><small>来源：${esc(c.source)}</small>${c.note ? `<blockquote>我的备注：${esc(c.note)}</blockquote>` : ""}<div class="notebook-card-actions"><button data-file="${esc(c.id)}">查看副本 / 备注</button>${c.url ? `<a href="${esc(c.url)}">来源页面 &gt;&gt;</a>` : ""}<label><input type="checkbox" data-compare="${esc(c.id)}" ${selected.includes(c.id) ? "checked" : ""}> 选入对照</label></div></article>`).join("") : ""}${["all", "note", "starred"].includes(mineFilter) && mineFilter !== "starred" ? s.notes.map((n) => `<article class="notebook-card personal-note"><span>个人推测</span><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p></article>`).join("") : ""}${!(mineFilter === "note" ? s.notes.length : entries.length + (mineFilter === "all" ? s.notes.length : 0)) ? '<div class="empty"><h3>这个分类还没有材料</h3><p>打开异常登记、附件或员工站文件，取得的材料会出现在这里。</p></div>' : ""}</section>`;
+        )}</div><div class="compare-toolbar"><span id="compare-count">已选 ${selected.length} / 2 份材料</span><button id="compare-files" ${selected.length !== 2 ? "disabled" : ""}>并排对照</button><button id="new-note">写一条笔记</button></div>${mineFilter !== "note" ? entries.map((c) => `<article class="notebook-card"><div class="notebook-card-head"><span>${label[c.kind]}</span><button data-star="${esc(c.id)}" aria-pressed="${c.starred}">${c.starred ? "★ 已标重点" : "☆ 标记重点"}</button></div><h3>${esc(c.title)}</h3><p>${esc(c.summary)}</p><small>来源：${esc(c.source)}</small>${c.note ? `<blockquote>我的备注：${esc(c.note)}</blockquote>` : ""}<div class="notebook-card-actions"><button data-file="${esc(c.id)}">查看副本 / 备注</button>${c.url ? `<a href="${esc(c.url)}">来源页面 &gt;&gt;</a>` : ""}<label><input type="checkbox" data-compare="${esc(c.id)}" ${selected.includes(c.id) ? "checked" : ""}> 选入对照</label></div></article>`).join("") : ""}${["all", "note", "starred"].includes(mineFilter) && mineFilter !== "starred" ? s.notes.map((n) => `<article class="notebook-card personal-note"><span>个人推测</span><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p></article>`).join("") : ""}${!(mineFilter === "note" ? s.notes.length : entries.length + (mineFilter === "all" ? s.notes.length : 0)) ? '<div class="empty"><h3>这个分类还没有材料</h3><p>保存公开登记或阅读站内附件，取得的材料会出现在这里。</p></div>' : ""}</section>`;
     updateChrome();
   }
   function compare() {
@@ -266,6 +269,7 @@
     if (!b) return;
     if (b.dataset.search) {
       e.preventDefault();
+      if ($("#modal").open) $("#modal").close();
       search(b.dataset.search);
     }
     if (b.dataset.nav) {
@@ -287,7 +291,7 @@
       store.collect(data.files.anomaly);
       modal(
         "未分类登记",
-        `<h2>未分类登记 / 0001</h2>${fileBody(data.files.anomaly)}<a class="record-action" href="trace.html">打开登记修订记录 &gt;&gt;</a><p>原始附件仍保留，可以从来源继续核对。</p>`,
+        `<h2>未分类登记 / 0001</h2>${fileBody(data.files.anomaly)}<a class="record-action" href="danny.html#journal">打开登记修订记录 &gt;&gt;</a><p>原始附件仍保留，可以从来源继续核对。</p>`,
       );
       updateChrome();
     }
@@ -295,11 +299,43 @@
       const item = [...store.read().registrations, ...data.items].find(
         (x) => x.id === b.dataset.item,
       );
-      if (item)
+      if (item) {
+        const source = item.archive
+          ? '<p>转录批次 HH / 0417。原始网页保留了归还照片与登记人随记。</p><a href="danny.html#journal" data-source="' +
+            esc(item.id) +
+            '">网页存档</a>'
+          : "<p>转录来源：城市拾物登记窗口。暂未收到更多附件。</p>";
         modal(
           "失物详情",
-          `<h2>${esc(item.name)}</h2><p>${esc(item.description)}</p><p>拾获地点：${esc(item.place)}</p><p>请先核对特征，示例登记不一定属于你。</p>`,
+          `<h2>${esc(item.name)}</h2><p>${esc(item.description)}</p><dl class="detail-list"><dt>登记编号</dt><dd>${esc(item.id)}</dd><dt>拾获地点</dt><dd>${esc(item.place)}</dd><dt>登记日期</dt><dd>${esc(item.date)}</dd></dl><p>请先核对特征，示例登记不一定属于你。</p><details class="source-details"><summary>登记来源与转录说明</summary>${source}</details><div class="related-queries"><span>同类 / 同地点</span>${searchIndex
+            .related([item], item.name)
+            .map((q) => `<button data-search="${esc(q)}">${esc(q)}</button>`)
+            .join(
+              "",
+            )}</div><button data-save-record="${esc(item.id)}" class="text-link">保存这份登记</button>`,
         );
+      }
+    }
+    if (b.dataset.source || b.dataset.saveRecord) {
+      const id = b.dataset.source || b.dataset.saveRecord;
+      const item = data.items.find((x) => x.id === id);
+      if (item) {
+        store.collect({
+          id: "public-" + id,
+          title: item.name + " / " + id,
+          kind: "record",
+          source: "找回网 · 公开登记",
+          summary: item.description,
+          fields: [
+            ["编号", id],
+            ["地点", item.place],
+          ],
+          body: [item.description],
+          url: item.archive ? "danny.html#journal" : "index.html#search",
+        });
+        updateChrome();
+        if (b.dataset.saveRecord) toast("登记已保存到“我的”。");
+      }
     }
     if (b.dataset.file) openFile(b.dataset.file);
     if (b.dataset.filter) {
@@ -348,10 +384,10 @@
       $("#hint-content").hidden = !$("#hint-content").hidden;
       b.setAttribute("aria-expanded", String(!$("#hint-content").hidden));
       $("#hint-body").textContent = has("plan")
-        ? "核对图纸上保留的编号，并把同一人的两份记录放在一起看。"
+        ? "注意材料的年代和适用范围。同地点的记录未必属于同一件事。"
         : has("trace")
-          ? "附件中的姓名、班次、编号和日期并不在同一份材料里。可以先收入“我的”再对照。"
-          : "先核对物品结果中那条缺少名称的登记，来源和正文可能不在同一页。";
+          ? "个人站的公开随记、相册与留言可能相互解释。过期信息可以用生效日期排除。"
+          : "除了名称，也可以试试描述里的地点和物品特征，登记通常保留了来源说明。";
     }
     if (b.id === "reset")
       modal(

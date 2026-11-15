@@ -6,7 +6,7 @@ const os = require("node:os");
 const { JSDOM } = require("jsdom");
 const root = path.resolve(__dirname, "../..");
 const makeStore = require("../journey-store.js");
-const ops = require("../harrow.js");
+const ops = require("../danny.js");
 const data = require("../data.js");
 function memory() {
   const map = new Map();
@@ -92,21 +92,29 @@ function boot(
   };
 }
 function login(t, local, session) {
-  const a = boot(t, "harrow-login", local, session);
-  a.set("[name=account]", "Danny.NIGHT");
-  a.set("[name=password]", "110317");
+  const a = boot(t, "danny", local, session, "#account");
+  a.set("[name=account]", "Danny.LATE");
+  a.set("[name=password]", "west1103");
   a.submit("#login-form");
-  assert.equal(a.$("#desk-link").hidden, false);
+  assert.match(a.$("#permission-label").textContent, /员工/);
   return a;
 }
 function cabinet(t, local, session) {
-  login(t, local, session);
-  const a = boot(t, "harrow-desk", local, session);
+  const a = login(t, local, session);
   a.set("[name=code]", "5003");
   a.submit("#cabinet-form");
+  a.click("[data-tab=archive]");
   return a;
 }
+function choose(a, side, value) {
+  a.set("#compare-" + side, value);
+  a.$("#compare-" + side).dispatchEvent(
+    new a.w.Event("change", { bubbles: true }),
+  );
+}
 function compare(a) {
+  choose(a, "left", "municipalA");
+  choose(a, "right", "municipalB");
   a.$("[value=state]").checked = true;
   a.$("[value=department]").checked = true;
   a.submit("#difference-form");
@@ -117,173 +125,269 @@ function chain(a) {
   a.set("[name=inheritance]", "岗位职责");
   a.submit("#chain-form");
 }
-test("整条新流程通过真实页面事件完成：附件、图文口令、柜号、差异、证据关联与终局", (t) => {
+test("完整调查在 Danny 同一网页中从游客升级员工，读档对照后回主站决定", (t) => {
   const local = memory(),
     session = memory(),
     main = boot(t, "index", local, session);
-  assert.ok(main.$("#intro").open);
   main.submit("#intro-form");
-  main.click("[data-anomaly]");
-  assert.equal(main.$("#modal-body a").getAttribute("href"), "trace.html");
-  assert.ok(main.state().clues.some((x) => x.id === "anomaly"));
-  const trace = boot(t, "trace", local, session);
-  trace.click("[data-collect=badge]");
-  trace.click("[data-open=receipt]");
-  const badge = new JSDOM(
-    fs.readFileSync(path.join(root, "assets/danny-badge.svg"), "utf8"),
+  assert.equal(main.$("[data-anomaly]"), null);
+  main.search("胶卷");
+  main.click('[data-item="0810"]');
+  assert.equal(
+    main.$(".source-details a").getAttribute("href"),
+    "danny.html#journal",
+  );
+  assert.equal(main.$(".source-details").open, false);
+  const site = boot(t, "danny", local, session);
+  assert.match(site.$("#permission-label").textContent, /游客/);
+  site.click("[data-read=rain]");
+  const words = [...site.d.querySelectorAll(".entry-prose p")]
+    .slice(0, 4)
+    .map((x) => x.textContent[0])
+    .join("")
+    .toLowerCase();
+  site.click("[data-tab=photos]");
+  site.click("[data-read=door-front]");
+  assert.equal(site.$("[data-read=door-back]").textContent, "翻到背面");
+  site.click("[data-read=door-back]");
+  assert.ok(site.state().clues.some((x) => x.id === "door-back"));
+  const back = new JSDOM(
+    fs.readFileSync(path.join(root, "assets/door-back.svg"), "utf8"),
     { contentType: "image/svg+xml" },
   );
-  const account =
-    badge.window.document
-      .querySelector("#badge-name")
-      .textContent.trim()
-      .toLowerCase() +
-    "." +
-    badge.window.document
-      .querySelector("#badge-shift")
-      .textContent.trim()
-      .toLowerCase();
-  const date = data.files.receipt.fields.find((x) => x[0] === "首次值勤")[1];
-  const password =
-    date.slice(5).replace("-", "") +
-    badge.window.document
-      .querySelector("#badge-number")
-      .textContent.trim()
-      .slice(-2);
-  badge.window.close();
-  const auth = boot(t, "harrow-login", local, session);
-  auth.set("[name=account]", account);
-  auth.set("[name=password]", password);
-  auth.submit("#login-form");
-  assert.equal(auth.$("#desk-link").hidden, false);
-  assert.equal(auth.$("[name=password]").value, "");
-  const desk = boot(t, "harrow-desk", local, session);
-  for (const key of ["night", "draft", "plan"])
-    desk.click("[data-open=" + key + "]");
+  const date = back.window.document
+    .querySelector("#first-night-date")
+    .textContent.replace(/\D/g, "");
+  back.window.close();
+  site.click("[data-tab=guestbook]");
+  site.click("[data-read=roster]");
+  const shift = data.files.roster.fields
+    .find(([key]) => key.startsWith("正式生效"))[1]
+    .split(" · ")[0]
+    .toLowerCase();
+  site.click("[data-tab=account]");
+  site.set("[name=account]", "danny." + shift);
+  site.set("[name=password]", words + date);
+  site.submit("#login-form");
+  assert.equal(site.w.location.pathname, "/html/danny.html");
+  assert.match(site.$("#site-main").textContent, /工作匣/);
+  assert.ok(!JSON.stringify([...local.map]).includes("west1103"));
+  for (const key of ["night", "plan", "intake", "draft"])
+    site.click("[data-read=" + key + "]");
+  assert.ok(site.state().clues.some((x) => x.id === "anomaly"));
   const plan = new JSDOM(
     fs.readFileSync(path.join(root, "assets/hall-plan.svg"), "utf8"),
     { contentType: "image/svg+xml" },
   );
-  desk.set(
+  site.set(
     "[name=code]",
     plan.window.document.querySelector("#project-number").textContent.trim(),
   );
   plan.window.close();
-  desk.submit("#cabinet-form");
-  assert.equal(desk.$("#archive-link").hidden, false);
-  const room = boot(t, "archive-room", local, session);
-  assert.ok(room.$("#clause-button").disabled);
-  room.submit("#difference-form");
-  assert.ok(!room.state().flags.includes("compared"));
-  compare(room);
-  assert.equal(room.$("#clause-button").disabled, false);
+  site.submit("#cabinet-form");
+  site.click("[data-tab=archive]");
+  compare(site);
   for (const key of ["signed", "relist", "clause"])
-    room.click("[data-open=" + key + "]");
-  chain(room);
-  assert.ok(room.state().flags.includes("verified"));
-  assert.equal(room.$("#truth-result").hidden, false);
-  const back = boot(t, "index", local, session, "#application");
-  assert.equal(back.$("#application-panel").hidden, false);
-  assert.match(back.$("#suggestions").textContent, /没有找到/);
-  back.set("#claim-form [name=name]", "测试玩家");
-  back.submit("#claim-form");
-  assert.equal(back.state().ending, "");
-  back.click("#confirm-choice");
-  assert.equal(back.state().ending, "claimed");
-  assert.equal(back.state().name, "测试玩家");
-  back.click("#return-home");
-  back.click("[data-nav=mine]");
-  assert.match(back.$("#results").textContent, /归档关系核验结果/);
-  const reload = boot(t, "index", local, session);
-  assert.equal(reload.state().ending, "claimed");
-  assert.equal(reload.$("#application-panel").hidden, true);
-  assert.match(reload.$("#results").textContent, /测试玩家/);
+    site.click("[data-read=" + key + "]");
+  chain(site);
+  assert.equal(site.$("#truth-result").hidden, false);
+  assert.ok(site.state().flags.includes("verified"));
+  const final = boot(t, "index", local, session, "#application");
+  assert.equal(final.$("#application-panel").hidden, false);
+  final.set("#claim-form [name=name]", "归来者");
+  final.submit("#claim-form");
+  assert.equal(final.state().ending, "");
+  final.click("#confirm-choice");
+  assert.equal(final.state().ending, "claimed");
+  final.click("#return-home");
+  final.click("[data-nav=mine]");
+  assert.match(final.$("#results").textContent, /归档关系核验结果/);
 });
-test("直接访问工作台和归档室不渲染受限材料", (t) => {
-  const a = boot(t, "harrow-desk");
-  assert.equal(a.$("#desk-content").hidden, true);
-  a.click("[data-open=night]");
-  assert.equal(a.$("#file-dialog").open, false);
-  const b = boot(t, "archive-room");
-  assert.equal(b.$("#archive-content").hidden, true);
-  assert.equal(b.$("#document-a").textContent, "");
-  b.click("[data-open=signed]");
-  assert.equal(b.state().clues.length, 0);
+test("主页多种物品、同义词、地点、编号与描述可检索；入口不再跟随任意查询", (t) => {
+  const a = boot(t);
+  a.click("#intro-skip");
+  for (const q of [
+    "皮夹",
+    "门匙",
+    "雨伞",
+    "胶卷",
+    "证件套",
+    "展览票",
+    "0812",
+    "白色",
+    "旧馆站",
+  ]) {
+    a.search(q);
+    assert.ok(a.d.querySelectorAll("[data-item]").length, q);
+    assert.equal(a.$("[data-anomaly]"), null);
+  }
+  a.search("完全不相关的字符串");
+  assert.equal(a.d.querySelectorAll("[data-item]").length, 0);
+  assert.match(a.$("#results").textContent, /暂无匹配/);
+  a.search("钱包");
+  a.click('[data-item="0816"]');
+  assert.equal(a.$(".source-details a"), null);
+  a.click('.related-queries [data-search="旧馆站"]');
+  assert.equal(a.$("#modal").open, false);
+  assert.ok(a.$('[data-item="0807"]'));
+  assert.ok(a.$('[data-item="0810"]'));
 });
-test("口令错误不建立会话；登录退出后需要重新验证", (t) => {
+test("相机、证件套与票根各自保留同源入口，普通登记可保存至我的", (t) => {
+  const a = boot(t);
+  a.click("#intro-skip");
+  for (const id of ["0810", "0808", "0807"]) {
+    a.search(id);
+    a.click('[data-item="' + id + '"]');
+    assert.equal(
+      a.$(".source-details a").getAttribute("href"),
+      "danny.html#journal",
+    );
+    a.click('[data-save-record="' + id + '"]');
+    a.click("#close-modal");
+  }
+  a.click("[data-nav=mine]");
+  assert.equal(a.d.querySelectorAll(".notebook-card").length, 3);
+  assert.ok(!a.state().clues.some((x) => x.id === "anomaly"));
+});
+test("游客可乱序阅读多个主题，但搜索与直访都不泄漏员工材料", (t) => {
   const local = memory(),
     session = memory(),
-    a = boot(t, "harrow-login", local, session);
-  a.set("[name=account]", "danny.night");
-  a.set("[name=password]", "0417");
+    a = boot(t, "danny", local, session, "#work");
+  assert.ok(!a.$("[data-read=night]"));
+  assert.match(a.$("#site-main").textContent, /没有开放/);
+  a.set("#site-search", "Q-17");
+  a.submit("#site-search-form");
+  assert.equal(a.d.querySelectorAll("[data-read]").length, 0);
+  a.click("[data-tab=journal]");
+  assert.ok(a.d.querySelectorAll("[data-read]").length >= 5);
+  a.click("[data-read=tea]");
+  assert.match(a.$("#reading-pane").textContent, /维修单号/);
+  assert.ok(!a.state().clues.some((x) => x.id === "night"));
+  const b = boot(t, "danny", local, session, "#archive");
+  assert.match(b.$("#site-main").textContent, /未调取/);
+  assert.ok(!b.$("#difference-form"));
+});
+test("旧口令、旧班次和照片上传日期均不通过；正确凭证不需要虚假的收集数量门槛", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#account");
+  for (const [account, password] of [
+    ["danny.night", "110317"],
+    ["bluecoat", "west1103"],
+    ["danny.night", "west1103"],
+    ["danny.late", "west1109"],
+    ["danny.late", "west1029"],
+  ]) {
+    a.set("[name=account]", account);
+    a.set("[name=password]", password);
+    a.submit("#login-form");
+    assert.match(a.$("#login-status").textContent, /不匹配/);
+    assert.equal(a.session.getItem("harrow-session"), null);
+  }
+  a.set("[name=account]", "DANNY.LATE");
+  a.set("[name=password]", "west1103");
   a.submit("#login-form");
-  assert.equal(session.getItem("harrow-session"), null);
-  assert.ok(!a.state().flags.includes("staff"));
-  login(t, local, session);
-  assert.ok(!JSON.stringify([...local.map]).includes("110317"));
-  const b = boot(t, "harrow-desk", local, session);
+  assert.match(a.$("#permission-label").textContent, /员工/);
+});
+test("登录后同页搜索私有材料，刷新保留员工权限；退出后搜索恢复游客范围", (t) => {
+  const local = memory(),
+    session = memory(),
+    a = login(t, local, session);
+  a.set("#site-search", "西北角");
+  a.submit("#site-search-form");
+  assert.ok(a.d.querySelectorAll("[data-read]").length >= 3);
+  a.click("[data-read=night]");
+  const b = boot(t, "danny", local, session, "#work");
+  assert.ok(b.$("[data-read=night]"));
   b.click("#logout");
-  b.click("[data-open=plan]");
-  assert.equal(b.$("#file-dialog").open, false);
+  b.set("#site-search", "西北角");
+  b.submit("#site-search-form");
+  assert.equal(b.d.querySelectorAll("[data-read]").length, 0);
+  assert.ok(b.state().clues.some((x) => x.id === "night"));
   assert.equal(
-    boot(t, "harrow-desk", local, session).$("#desk-content").hidden,
-    true,
+    boot(t, "danny", local, session, "#work").$("[data-read=night]"),
+    null,
   );
 });
-test("柜号错误不开放归档；仅猜中关联答案仍需原始材料", (t) => {
+test("旧会话不会绕过新版登录；旧线索与笔记保留", (t) => {
   const local = memory(),
-    session = memory();
-  login(t, local, session);
-  const desk = boot(t, "harrow-desk", local, session);
-  desk.set("[name=code]", "0417");
-  desk.submit("#cabinet-form");
-  assert.equal(desk.$("#archive-link").hidden, true);
-  desk.set("[name=code]", "5003");
-  desk.submit("#cabinet-form");
-  const a = boot(t, "archive-room", local, session);
-  chain(a);
-  assert.ok(!a.state().flags.includes("verified"));
-  compare(a);
-  chain(a);
-  assert.ok(!a.state().flags.includes("verified"));
-  a.click("[data-open=clause]");
-  assert.ok(a.state().clues.some((x) => x.id === "clause"));
+    session = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.badge);
+  store.addNote("旧笔记", "保留");
+  session.setItem("harrow-session", "danny");
+  const a = boot(t, "danny", local, session, "#work");
+  assert.equal(a.$("[data-read=night]"), null);
+  assert.equal(a.state().notes[0].title, "旧笔记");
 });
-test("多选错误字段不通过，正确核对和已读文件刷新后保留", (t) => {
+test("登录失败和访问工作匣不提前开放主站认领；实际读到查询快照后才出现", (t) => {
   const local = memory(),
-    session = memory();
-  cabinet(t, local, session);
-  const a = boot(t, "archive-room", local, session);
+    session = memory(),
+    site = login(t, local, session);
+  let main = boot(t, "index", local, session);
+  assert.equal(main.$("#application-panel").hidden, true);
+  site.click("[data-read=intake]");
+  main = boot(t, "index", local, session);
+  assert.equal(main.$("#application-panel").hidden, false);
+});
+test("干扰图纸编号不调取旧柜；选择错误材料或额外字段不开放附则", (t) => {
+  const local = memory(),
+    session = memory(),
+    a = login(t, local, session);
+  a.set("[name=code]", "5013");
+  a.submit("#cabinet-form");
+  assert.ok(!a.state().flags.includes("cabinet"));
+  a.set("[name=code]", "5003");
+  a.submit("#cabinet-form");
+  a.click("[data-tab=archive]");
+  choose(a, "left", "municipalA");
+  choose(a, "right", "renovation");
+  a.$("[value=state]").checked = true;
+  a.$("[value=department]").checked = true;
+  a.submit("#difference-form");
+  assert.ok(!a.state().flags.includes("compared"));
+  choose(a, "right", "municipalB");
   a.$("[value=name]").checked = true;
-  compare(a);
+  a.submit("#difference-form");
   assert.ok(!a.state().flags.includes("compared"));
   a.$("[value=name]").checked = false;
-  compare(a);
-  a.click("[data-open=signed]");
-  const b = boot(t, "archive-room", local, session);
-  assert.equal(b.$("#clause-button").disabled, false);
-  assert.ok(b.state().clues.some((x) => x.id === "signed"));
+  a.submit("#difference-form");
+  assert.ok(a.$("[data-read=clause]"));
 });
-test("突变只发生一次，可主动减少效果", (t) => {
+test("提前猜中终局关联也必须查阅原件，已核对状态可以刷新恢复", (t) => {
   const local = memory(),
-    session = memory();
-  cabinet(t, local, session);
-  const a = boot(t, "archive-room", local, session);
+    session = memory(),
+    a = cabinet(t, local, session);
+  chain(a);
+  assert.ok(!a.state().flags.includes("verified"));
+  compare(a);
+  chain(a);
+  assert.ok(!a.state().flags.includes("verified"));
+  a.click("[data-read=clause]");
+  const b = boot(t, "danny", local, session, "#archive");
+  assert.ok(b.$("[data-read=clause]"));
+  for (const key of ["signed", "relist"]) b.click("[data-read=" + key + "]");
+  b.set("[name=signer]", "q17");
+  b.set("[name=subject]", "Ｑ－１７");
+  b.set("[name=inheritance]", "岗位职责");
+  b.submit("#chain-form");
+  assert.ok(b.state().flags.includes("verified"));
+});
+test("突变只在第一次调取后进入旧柜时出现，减少效果会即时生效", (t) => {
+  const local = memory(),
+    session = memory(),
+    a = cabinet(t, local, session);
   assert.equal(a.$("#archive-transition").hidden, false);
   a.tick();
   assert.equal(a.$("#archive-transition").hidden, true);
   assert.equal(
-    boot(t, "archive-room", local, session).$("#archive-transition").hidden,
+    boot(t, "danny", local, session, "#archive").$("#archive-transition")
+      .hidden,
     true,
   );
   const l = memory(),
     s = memory();
   makeStore(l).update((x) => (x.settings.reduced = true));
-  cabinet(t, l, s);
-  assert.equal(
-    boot(t, "archive-room", l, s).$("#archive-transition").hidden,
-    true,
-  );
+  assert.equal(cabinet(t, l, s).$("#archive-transition").hidden, true);
 });
 test("我的仅保存实际取得材料，可做备注、重点、笔记与两份对照", (t) => {
   const local = memory(),
@@ -330,7 +434,7 @@ test("线索辅助默认关闭，手动开启且不会匹配尚未取得的档�
   a.set("#search", "特殊认领附则");
   assert.equal(a.$("#clue-match").hidden, true);
   a.search("钱包");
-  a.click("[data-anomaly]");
+  assert.equal(a.$("[data-anomaly]"), null);
   assert.ok(!a.state().clues.some((x) => x.id === "truth"));
 });
 test("输入法组词期间 Enter 不提交查询；提交后刷新保留查询", (t) => {
@@ -350,7 +454,8 @@ test("关闭终局确认不提交；放弃需确认，清档不触碰旧版存�
   const local = memory(),
     session = memory();
   local.setItem("zhaohui-story-v1", "old-save");
-  login(t, local, session);
+  const site = login(t, local, session);
+  site.click("[data-read=intake]");
   const a = boot(t, "index", local, session);
   a.click("#intro-skip");
   a.click("#leave");
@@ -392,7 +497,7 @@ test("终局存档不可重复覆盖，空姓名无法签署", () => {
   assert.equal(store.read().ending, "left");
 });
 test("口令、差异、证据算法拒绝相近错误答案", () => {
-  assert.ok(ops.checkCredentials(" DANNY.NIGHT ", "110317"));
+  assert.ok(ops.checkCredentials(" DANNY.LATE ", "west1103"));
   assert.equal(ops.checkCredentials("danny.night", "110318"), false);
   assert.equal(ops.checkDifferences(["state", "department", "name"]), false);
   assert.equal(ops.checkChain("Danny", "Q-17", "岗位职责"), false);
@@ -402,7 +507,7 @@ test("打包产物包含每个页面与全部本地依赖，源码无需构建�
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "arg-pages-"));
   t.after(() => fs.rmSync(out, { recursive: true, force: true }));
   const manifest = buildSite(out);
-  assert.ok(manifest["js/harrow.js"]);
+  assert.ok(manifest["js/danny.js"]);
   for (const base of [root, out])
     for (const page of fs
       .readdirSync(path.join(base, "html"))

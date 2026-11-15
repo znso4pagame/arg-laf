@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#485967" />
+    <title>Danny / 雨停之前</title>
+    <link rel="stylesheet" href="../css/danny.css" />
+    <script defer src="../js/data.js"></script>
+    <script defer src="../js/journey-store.js"></script>
+    <script defer src="../js/search-index.js"></script>
+    <script defer src="../js/danny.js"></script>
+  </head>
+  <body>
+    <div class="site">
+      <div class="top-strip">
+        <span>PERSONAL WEB / SINCE 2006</span><a href="index.html">返回来处</a>
+      </div>
+      <header class="masthead">
+        <p>bluecoat's homepage</p>
+        <h1>雨停之前<span> / Danny</span></h1>
+        <p>记录一些白天不必记得的事。</p>
+        <div class="window-grid" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+        </div>
+      </header>
+      <nav class="site-nav" aria-label="个人站导航">
+        <a href="#journal" data-tab="journal">随记</a
+        ><a href="#photos" data-tab="photos">相册</a
+        ><a href="#guestbook" data-tab="guestbook">留言簿</a
+        ><a href="#work" data-tab="work">工作匣</a
+        ><a href="#archive" data-tab="archive" id="archive-nav" hidden>旧柜</a
+        ><a href="#account" data-tab="account" id="account-nav">访客入口</a>
+      </nav>
+      <div class="site-grid">
+        <aside>
+          <section class="profile">
+            <div class="avatar" aria-hidden="true">D.</div>
+            <h2>Danny</h2>
+            <p>夜班 / 摄影 / 坐最后一班车</p>
+            <dl>
+              <dt>站内昵称</dt>
+              <dd>bluecoat</dd>
+              <dt>最后值勤同步</dt>
+              <dd>2019.11.03 23:41</dd>
+            </dl>
+            <p class="permission" id="permission-label">游客浏览</p>
+            <button id="logout" hidden>退出员工模式</button>
+          </section>
+          <section>
+            <h2>站内查找</h2>
+            <form id="site-search-form">
+              <label class="sr-only" for="site-search">站内查找</label
+              ><input
+                id="site-search"
+                type="search"
+                maxlength="80"
+                placeholder="随记、附件与旧留言"
+                autocomplete="off"
+              /><button>查找</button>
+            </form>
+            <p class="fine" id="search-scope">范围：公开内容</p>
+          </section>
+          <section>
+            <h2>书签</h2>
+            <a href="index.html#mine">我的已收集材料</a>
+            <p class="fine">这里的旧记录有时会保留两个版本。</p>
+          </section>
+          <section class="calendar" aria-label="2019 年十一月月历">
+            <h2>November / 2019</h2>
+            <p>一　二　三　四　五　六　日</p>
+            <p>
+              　　　　　　　　1　2　3<br />4　5　6　7　8　9　10<br />11　12　13　14　15　16　17
+            </p>
+          </section>
+        </aside>
+        <main id="site-main" tabindex="-1"></main>
+      </div>
+      <p
+        id="site-status"
+        class="site-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <footer>
+        <span>Danny's personal web · old mirror</span
+        ><span>留言暂不开放 / 仅本机存档</span>
+      </footer>
+      <noscript
+        >需要启用 JavaScript 才能阅读存档、保存材料与切换权限。</noscript
+      >
+    </div>
+    <div id="archive-transition" hidden aria-hidden="true">
+      当前访问者未登记<br /><small>正在恢复旧记录……</small>
+    </div>
+  </body>
+</html>
