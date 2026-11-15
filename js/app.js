@@ -327,6 +327,14 @@
     const panel=$('#clue-match'),results=$('#clue-match-results');
     if(!clueMatcher||!panel||!results||!clueMatcher.fold(query)||state.ending||state.seen.includes('岗位职责'))return;
     const candidates=matchCandidates();
+    const resolved=normalize(query);
+    if(Object.hasOwn(data.clues,resolved)&&canAccess(resolved)) {
+      const key='clue:'+resolved;
+      let candidate=candidates.find(c=>c.key===key);
+      if(!candidate) {candidate={key,label:resolved==='我是小鹿'?'小鹿':resolved,forms:[],query:resolved};candidates.push(candidate);}
+      // 查询逻辑已接受的同义表达，在校对栏中也应显示为完整可用。
+      candidate.forms=[...candidate.forms,query];
+    }
     const matches=clueMatcher.rank(query,candidates);
     if(!matches.length)return;
     panel.hidden=false;

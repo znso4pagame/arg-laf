@@ -463,6 +463,15 @@ test('旧缓存未加载匹配脚本时，原有查询和开场仍能正常运�
   a.route();assert.ok(a.$('#claim-form'));assert.equal(a.state().ending,'');
 });
 
+test('已能识别的自然问法在校对栏也显示完整匹配',t=>{
+  const a=boot(t);a.search('钱包');a.search('你是谁');
+  a.input('#search','我的蓝色钱包在哪');assert.equal(a.$('.clue-match-stage').textContent,'ABC');
+  assert.equal(a.$('#clue-match-results [data-search]').dataset.search,'我的东西');
+  a.route();a.input('#search','如果我认领你之后会怎样');
+  assert.equal(a.$('.clue-match-stage').textContent,'ABC');
+  assert.equal(a.$('#clue-match-results [data-search]').dataset.search,'岗位职责');
+});
+
 test('线上打包包含独立说明页和内容指纹，所有引用都能解析',()=>{
   const os=require('node:os');const crypto=require('node:crypto');const {buildSite}=require('../build-pages.cjs');
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'zhaohui-build-'));const out=path.join(temp,'site');
