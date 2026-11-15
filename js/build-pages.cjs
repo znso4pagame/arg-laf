@@ -26,6 +26,7 @@ function buildSite(destination = path.join(root, "_site")) {
       .filter((x) => x.endsWith(".css"))
       .map((x) => `css/${x}`),
     "js/app.js",
+    "js/xiaolu.js",
     "js/data.js",
     "js/clue-matcher.js",
     "js/journey-store.js",

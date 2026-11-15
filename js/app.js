@@ -158,13 +158,34 @@
         )
         .join("");
   }
+  function earlyWhisper(s) {
+    const query = $("#search").value;
+    const records = searchIndex.matches(query, data.items);
+    const reply = window.ZHAOHUI_XIAOLU.next(query, s, { itemMatch: records.length > 0 });
+    if (!reply) return false;
+    const ordinary = searchIndex.related(records, query).slice(0, 2);
+    motion.cancelTree($("#suggestions"));
+    $("#suggestions").hidden = false;
+    $("#suggestions").innerHTML =
+      ordinary.slice(0, 1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("") +
+      `<button type="button" class="suggestion-response" data-search="${esc(reply.text)}" title="用这句话继续查询">${esc(reply.text)}</button>` +
+      ordinary.slice(1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("");
+    motion.enter($("#suggestions"), { items: ".suggestion-response" });
+    store.collect({
+      id: reply.id, kind: "message", title: "查询建议 / " + reply.text,
+      source: "找回网 · 实际显示的查询建议", summary: reply.text, body: [reply.text],
+    });
+    updateChrome();
+    return true;
+  }
   function whisper() {
     const s = store.read();
-    if (
-      s.ending ||
-      !(has("anomaly") || has("clause") || s.flags.includes("verified"))
-    )
+    if (s.ending) return;
+    if (!s.flags.includes("staff") && !s.flags.includes("verified") &&
+      !has("clause") && !has("conversation")) {
+      earlyWhisper(s);
       return;
+    }
     const q = matcher.fold($("#search").value);
     const stage = s.flags.includes("verified")
       ? "truth"
@@ -347,7 +368,7 @@
       history.pushState(state, "", hash);
     navigationStamp = stampNavigation();
   }
-  function search(query, { record = true, syncUrl = true } = {}) {
+  function search(query, { record = true, syncUrl = true, respond = true } = {}) {
     query = String(query).trim().slice(0, 80);
     if (!query) {
       $("#search").focus();
@@ -371,7 +392,7 @@
     });
     renderResults(query);
     updateChrome();
-    whisper();
+    if (respond) whisper();
     matchInput(query, { submitted: true });
     if (syncUrl) commitView("#search");
     motion.enter($("#results"), { items: ".item" });
@@ -486,7 +507,7 @@
         cursor = s.searchCursor + (b.id === "query-back" ? -1 : 1);
       if (cursor >= 0 && cursor < s.searchHistory.length) {
         store.update((x) => (x.searchCursor = cursor));
-        search(s.searchHistory[cursor], { record: false });
+        search(s.searchHistory[cursor], { record: false, respond: false });
       }
     }
     if (b.id === "clear-notebook-search") {
@@ -642,7 +663,7 @@
       );
     if (b.id === "notebook-return") {
       document.body.classList.remove("notebook-mode");
-      displayedQuery ? search(displayedQuery) : home({ section: currentNav });
+      displayedQuery ? search(displayedQuery, { respond: false }) : home({ section: currentNav });
     }
     if (b.id === "close-modal" || b.id === "cancel-choice") {
       $("#modal").close();
@@ -901,6 +922,10 @@
       toast("本轮已在其他窗口结束，已更新为当前记录。");
     }
     syncAssist();
+    if (store.read().ending) {
+      motion.cancelTree($("#suggestions"));
+      $("#suggestions").hidden = true;
+    }
     if (store.read().ending || !store.read().settings.assist) clearMatch();
     if (document.body.classList.contains("notebook-mode")) {
       const input = $("#notebook-search"),
@@ -943,6 +968,7 @@
     search(savedQuery, {
       record: !store.read().searchHistory.length,
       syncUrl: false,
+      respond: false,
     });
   function navigateToHash(hash) {
     if ($("#modal").open) $("#modal").close();
@@ -957,7 +983,7 @@
       updateChrome();
       if (!$("#application-panel").hidden) {
         $("#application-panel").scrollIntoView?.({ block: "start" });
-        whisper();
+        if (store.read().flags.includes("verified")) whisper();
       }
       return;
     }
@@ -968,7 +994,7 @@
     if (hash === "#search" || !hash) {
       document.body.classList.remove("notebook-mode");
       const query = $("#search").value;
-      if (query) search(query, { record: false, syncUrl: false });
+      if (query) search(query, { record: false, syncUrl: false, respond: false });
       else home({ remember: false, syncUrl: false });
       if (hash) {
         $(".search-section").scrollIntoView?.({ block: "start" });

@@ -322,7 +322,7 @@ test("相机、证件套与票根各自保留同源入口，普通登记可保�
     a.click("#close-modal");
   }
   a.click("[data-nav=mine]");
-  assert.equal(a.d.querySelectorAll(".notebook-card").length, 3);
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith("public-")).length, 3);
   assert.ok(!a.state().clues.some((x) => x.id === "anomaly"));
 });
 test("游客可乱序阅读多个主题，但搜索与直访都不泄漏员工材料", (t) => {
@@ -624,7 +624,7 @@ test("本机登记也可按描述检索和保存，来源不会伪装成公开�
   a.click("#close-modal");
   a.click("[data-nav=mine]");
   assert.match(a.$("#results").textContent, /绿色水杯/);
-  assert.match(a.state().clues[0].source, /本机/);
+  assert.match(a.state().clues.find((c) => c.title.includes("绿色水杯")).source, /本机/);
 });
 
 test("时间校订要排除旧日期并统一钟表，游客及未校订的员工搜不到会话正文", (t) => {
@@ -1815,4 +1815,94 @@ test("收藏筛选、重点和搜索重绘后仍保留键盘操作位置", (t) =
   assert.equal(a.d.activeElement.id, 'notebook-search');
   a.click('#clear-notebook-search');
   assert.equal(a.d.activeElement.id, 'notebook-search');
+});
+
+test("小鹿从第一次普通失物查询就出现，每次一句并可点击原句续读", (t) => {
+  const a = boot(t);
+  a.click('#intro-skip');
+  a.search('相机');
+  assert.match(a.$('#suggestions').textContent, /我是小鹿/);
+  assert.equal(a.d.querySelectorAll('.suggestion-response').length, 1);
+  assert.ok(a.$('#suggestions [data-search="旧馆站"]'));
+  assert.ok(a.$('[data-item="0810"]'));
+  let messages = a.state().clues.filter((c) => c.id.startsWith('xiaolu-'));
+  assert.equal(messages.length, 1);
+  assert.deepEqual(Array.from(messages[0].body), ['我是小鹿，先替你查。']);
+  a.click('#suggestions .suggestion-response');
+  assert.match(a.$('#suggestions').textContent, /别只对名称/);
+  a.click('#suggestions .suggestion-response');
+  assert.match(a.$('#suggestions').textContent, /先别关/);
+  a.click('#suggestions .suggestion-response');
+  assert.equal(a.$('#suggestions').hidden, true);
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith('xiaolu-')).length, 3);
+  assert.ok(!a.state().flags.includes('staff'));
+  assert.equal(a.$('#application-panel').hidden, true);
+});
+test("小鹿前段可乱序交谈，多入口都能触发但不泄露员工谜底", (t) => {
+  for (const query of ['钱包', '钥匙', '证件', '雨伞', '门票', '胶卷']) {
+    const a = boot(t);
+    a.click('#intro-skip');
+    a.search(query);
+    assert.match(a.$('#suggestions').textContent, /我是小鹿/);
+  }
+  const a = boot(t);
+  a.click('#intro-skip');
+  a.search('你在哪');
+  assert.match(a.$('#suggestions').textContent, /B3/);
+  a.search('你是谁');
+  assert.match(a.$('#suggestions').textContent, /我叫小鹿/);
+  a.search('小鹿');
+  assert.match(a.$('#suggestions').textContent, /只有我/);
+  a.search('你是谁');
+  assert.match(a.$('#suggestions').textContent, /建议里/);
+  a.search('客服');
+  assert.equal(a.$('#suggestions').hidden, true);
+  a.search('我要关了');
+  assert.match(a.$('#suggestions').textContent, /别关/);
+  a.search('帮帮我');
+  assert.match(a.$('#suggestions').textContent, /看到我/);
+  assert.doesNotMatch(a.state().clues.map((c) => c.body.join('')).join(''), /west1103|danny\.late|5003|你就是下一个|岗位职责/);
+  for (const query of ['系统', '算法', '天气']) {
+    a.search(query);
+    assert.equal(a.$('#suggestions').hidden, true);
+  }
+});
+test("前段续读跨刷新保留，新证据改变回应，终局后沉默且注销可重玩", (t) => {
+  const local = memory(), a = boot(t, 'index', local);
+  a.click('#intro-skip');
+  a.search('你是谁');
+  const before = a.state().clues.length;
+  const b = boot(t, 'index', local, memory(), '#search');
+  assert.equal(b.state().clues.length, before);
+  b.search('你是谁');
+  assert.match(b.$('#suggestions').textContent, /只有我/);
+  makeStore(local).collect(data.files.trace);
+  b.search('你是谁');
+  assert.match(b.$('#suggestions').textContent, /你还记得/);
+  b.search('Danny');
+  assert.match(b.$('#suggestions').textContent, /你回来了/);
+  makeStore(local).mark('staff');
+  makeStore(local).finish('left');
+  b.w.dispatchEvent(new b.w.StorageEvent('storage', { key: b.w.ZHAOHUI_JOURNEY.key }));
+  assert.equal(b.$('#suggestions').hidden, true);
+  b.search('小鹿');
+  assert.equal(b.$('#suggestions').hidden, true);
+  b.click('#reset'); b.click('#confirm-reset'); b.click('#intro-skip');
+  b.search('钱包');
+  assert.match(b.$('#suggestions').textContent, /我是小鹿/);
+});
+
+test("回退查询与从收藏返回不会替玩家消耗小鹿下一句", (t) => {
+  const a = boot(t);
+  a.click('#intro-skip');
+  a.search('你是谁');
+  a.search('你在哪');
+  const before = a.state().clues.length;
+  a.click('#query-back');
+  assert.equal(a.state().clues.length, before);
+  a.click('[data-nav=mine]');
+  a.click('#notebook-return');
+  assert.equal(a.state().clues.length, before);
+  a.search('你是谁');
+  assert.match(a.$('#suggestions').textContent, /只有我/);
 });
