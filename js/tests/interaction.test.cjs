@@ -531,3 +531,21 @@ test("打包产物包含每个页面与全部本地依赖，源码无需构建�
   assert.ok(!fs.existsSync(path.join(out, "js/tests")));
   assert.ok(!fs.existsSync(path.join(out, "ARG storyline.docx")));
 });
+
+test("本机登记也可按描述检索和保存，来源不会伪装成公开窗口", (t) => {
+  const a = boot(t);
+  a.click("#intro-skip");
+  a.click("[data-nav=register]");
+  a.set("#register-form [name=name]", "绿色水杯");
+  a.set("#register-form [name=place]", "林间小路");
+  a.set("#register-form [name=description]", "杯盖有银色猫咪");
+  a.submit("#register-form");
+  a.search("猫咪");
+  a.click("[data-item]");
+  assert.match(a.$(".source-details").textContent, /本机演示/);
+  a.click("[data-save-record]");
+  a.click("#close-modal");
+  a.click("[data-nav=mine]");
+  assert.match(a.$("#results").textContent, /绿色水杯/);
+  assert.match(a.state().clues[0].source, /本机/);
+});

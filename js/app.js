@@ -304,7 +304,9 @@
           ? '<p>转录批次 HH / 0417。原始网页保留了归还照片与登记人随记。</p><a href="danny.html#journal" data-source="' +
             esc(item.id) +
             '">网页存档</a>'
-          : "<p>转录来源：城市拾物登记窗口。暂未收到更多附件。</p>";
+          : item.id.startsWith("local-")
+            ? "<p>来源：本机演示登记，未发送到公开平台。</p>"
+            : "<p>转录来源：城市拾物登记窗口。暂未收到更多附件。</p>";
         modal(
           "失物详情",
           `<h2>${esc(item.name)}</h2><p>${esc(item.description)}</p><dl class="detail-list"><dt>登记编号</dt><dd>${esc(item.id)}</dd><dt>拾获地点</dt><dd>${esc(item.place)}</dd><dt>登记日期</dt><dd>${esc(item.date)}</dd></dl><p>请先核对特征，示例登记不一定属于你。</p><details class="source-details"><summary>登记来源与转录说明</summary>${source}</details><div class="related-queries"><span>同类 / 同地点</span>${searchIndex
@@ -318,13 +320,17 @@
     }
     if (b.dataset.source || b.dataset.saveRecord) {
       const id = b.dataset.source || b.dataset.saveRecord;
-      const item = data.items.find((x) => x.id === id);
+      const item = [...store.read().registrations, ...data.items].find(
+        (x) => x.id === id,
+      );
       if (item) {
         store.collect({
           id: "public-" + id,
           title: item.name + " / " + id,
           kind: "record",
-          source: "找回网 · 公开登记",
+          source: item.id.startsWith("local-")
+            ? "找回网 · 本机登记"
+            : "找回网 · 公开登记",
           summary: item.description,
           fields: [
             ["编号", id],
