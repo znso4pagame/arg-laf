@@ -193,6 +193,19 @@ footer > div:first-child > span, .footer-bottom, .footer-bottom button { color: 
 .ending button { color: #a69a7d; border-color: #655b45; }
 .ending button:hover { background: #332f23; border-color: #a49473; }
 
+/* 年代感留给纸色，承载线索的小字保持足够深的墨色。 */
+.search-intro > span, .popular, .popular button, .search-tip,
+.item-description, .item-meta, .item-view, .result-meta,
+.board-bottom, .archive-note p, .empty p,
+footer > div:first-child > span, .footer-bottom, .footer-bottom button {
+  color: #776448;
+}
+.guide-heading > div > span, .guide-actions > span { color: #806849; }
+.steps-panel > p, .steps-panel li p { color: #6c5a40; }
+.notice p, .register-panel p { color: #776448; }
+.record dt, .detail-list dt, .record-note { color: #806344; }
+.badge { color: #865c42; }
+
 @media (max-width: 1050px) {
   .header { gap: 35px; }
   .hero-copy { padding: 36px 30px; }
