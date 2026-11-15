@@ -10,7 +10,7 @@ const html = fs.readFileSync(path.join(root, 'html/index.html'), 'utf8');
 const source = ['js/data.js', 'js/app.js'].map(file => fs.readFileSync(path.join(root, file), 'utf8'));
 
 // 离线执行真实 DOM 事件。虚拟时钟让取消请求、逐条建议和转场可确定地验证。
-function boot(t, { saved, reduced = false, storageBlocked = false } = {}) {
+function boot(t, { saved, reduced = false, storageBlocked = false, showOpening = false, introSeen = false } = {}) {
   const dom = new JSDOM(html, { url: 'https://zhaohui.test/html/index.html', runScripts: 'outside-only' });
   const w = dom.window, d = w.document, errors = [];
   let time = 0, serial = 0;
@@ -24,8 +24,11 @@ function boot(t, { saved, reduced = false, storageBlocked = false } = {}) {
   w.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); this.dispatchEvent(new w.Event('close')); };
   w.addEventListener('error', event => errors.push(event.error));
   if (saved) w.localStorage.setItem(storageKey, typeof saved === 'string' ? saved : JSON.stringify(saved));
+  if (introSeen) w.localStorage.setItem('zhaohui-intro-v1', 'read');
   if (storageBlocked) Object.defineProperty(w, 'localStorage', { get() { throw new Error('Storage denied'); } });
   source.forEach(s => w.eval(s));
+  // 既有回归用例从自主查档开始；开场用例保留真实首次进入状态。
+  if (!showOpening && d.querySelector('#intro').open) d.querySelector('#intro-skip').click();
   t.after(() => { assert.deepEqual(errors, [], '没有未处理的 DOM 异常'); dom.window.close(); });
   const $ = selector => d.querySelector(selector);
   const click = selector => { const target = $(selector); assert.ok(target, `存在控件 ${selector}`); target.click(); };
@@ -254,4 +257,60 @@ test('跳过早期词条时手记跟随当前证据；两种结局都停止提�
   b.input('[name="claimant"]','测试'); b.input('[name="reason"]','测试理由'); b.submit('#claim-form'); b.tick(); b.click('#return-home');
   assert.equal(b.$('#field-guide').hidden,true);
   assert.equal(b.$('#service-state').textContent,'INDEX / ONLINE');
+});
+
+test('首次进入展示短引子与查档须知，不泄露深层剧情', t => {
+  const a = boot(t,{showOpening:true});
+  assert.equal(a.$('#intro').open,true);
+  assert.equal(a.d.activeElement,a.$('#intro-title'));
+  assert.match(a.$('#intro').textContent,/回到住处/);
+  assert.match(a.$('#intro').textContent,/初次查档须知/);
+  assert.doesNotMatch(a.$('#intro').textContent,/小鹿|B3|0002|归档室|岗位职责/);
+  assert.equal(a.state(),null);
+  a.input('#intro-item','钥匙'); a.submit('#intro-form');
+  assert.equal(a.$('#intro').open,false);
+  a.tick(); assert.equal(a.state().original,'钥匙');
+  assert.equal(a.$('#objective-name').textContent,'钥匙');
+  assert.equal(a.$('#search-objective').hidden,false);
+  assert.match(a.$('#results').textContent,/一串家门钥匙/);
+  assert.equal(a.w.localStorage.getItem('zhaohui-intro-v1'),'read');
+});
+
+test('开场可以略过或用 Escape 关闭，空白物品不能发起查询', t => {
+  const a = boot(t,{showOpening:true});
+  a.input('#intro-item','  '); a.submit('#intro-form');
+  assert.equal(a.$('#intro').open,true);
+  assert.equal(a.$('#intro-error').hidden,false);
+  a.click('#intro-skip'); assert.equal(a.$('#intro').open,false);
+  assert.equal(a.state(),null);
+  const b = boot(t,{showOpening:true});
+  b.$('#intro').dispatchEvent(new b.w.Event('cancel',{cancelable:true}));
+  assert.equal(b.$('#intro').open,false);
+  assert.equal(b.w.localStorage.getItem('zhaohui-intro-v1'),'read');
+  const c = boot(t,{showOpening:true,storageBlocked:true});
+  c.click('#close-intro'); assert.equal(c.$('#intro').open,false);
+  c.search('钱包'); assert.match(c.$('#results').textContent,/帮帮我/);
+});
+
+test('读过开场和已有旧版进度的玩家不会被打断；重读不改变进度', t => {
+  const a = boot(t,{showOpening:true,introSeen:true}); assert.equal(a.$('#intro').open,false);
+  const b = boot(t,{showOpening:true,saved:{seen:['你是谁'],level:0,original:'钱包',history:['你是谁']}});
+  assert.equal(b.$('#intro').open,false);
+  b.search('B3'); const before = b.w.localStorage.getItem(storageKey);
+  b.click('#read-intro');
+  assert.equal(b.$('#intro').open,true); assert.equal(b.$('#intro-form').hidden,true);
+  assert.equal(b.$('#intro-return').hidden,false);
+  b.click('#intro-return'); assert.equal(b.$('#intro').open,false);
+  assert.equal(b.w.localStorage.getItem(storageKey),before);
+  assert.match(b.$('#results').textContent,/工牌/);
+});
+
+test('清除本机记录后重新展示开场，结局重开不再次出现', t => {
+  const a = boot(t); a.search('钱包'); a.click('#reset'); a.click('#confirm-reset');
+  assert.equal(a.$('#intro').open,true);
+  assert.equal(a.$('#intro-form').hidden,false);
+  assert.equal(a.w.localStorage.getItem('zhaohui-intro-v1'),null);
+  a.click('#intro-skip'); assert.equal(a.$('#search-objective').hidden,true);
+  const b = boot(t,{showOpening:true,saved:{seen:[],ending:'left',history:[]}});
+  assert.equal(b.$('#intro').open,false);
 });

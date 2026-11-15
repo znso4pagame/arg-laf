@@ -3,6 +3,7 @@
   const $ = selector => document.querySelector(selector);
   const data = window.ZHAOHUI;
   const key = 'zhaohui-story-v1';
+  const introKey = 'zhaohui-intro-v1';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const fresh = () => ({ seen: [], level: 0, original: '', ending: '', name: '', waiting: false, history: [], hintLevels: {}, draft: { name: '', reason: '' }, registrations: [], applications: {}, badgeVisits: 0 });
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,13 +34,15 @@
   }
   let state;
   try { state = readState(localStorage.getItem(key)); } catch { storageAvailable = false; state = fresh(); }
+  let introSeen = false;
+  try { introSeen = localStorage.getItem(introKey) === 'read'; } catch { storageAvailable = false; }
   const save = () => { try { localStorage.setItem(key, JSON.stringify(state)); } catch { storageAvailable = false; } };
   function resolveDeparture() {
     if (state.waiting && !state.ending) { state.ending = 'left'; state.waiting = false; state.draft = fresh().draft; save(); }
   }
   resolveDeparture();
   let requestId = 0, suggestionId = 0, endingId = 0, toastTimer;
-  let composing = false, submitting = false, activeQuery = '', openGuide = '', modalTrigger;
+  let composing = false, submitting = false, activeQuery = '', openGuide = '', modalTrigger, introTrigger;
   const pendingTimers = new Set();
   function later(callback, delay) {
     const id = setTimeout(() => { pendingTimers.delete(id); callback(); }, reduceMotion.matches ? 0 : delay);
@@ -219,6 +222,8 @@
     $('#history-list').innerHTML = state.history.slice().reverse().map(q => `<button type="button" data-search="${escape(q)}" ${q === activeQuery ? 'aria-current="true"' : ''}>${escape(q)}<span>↗</span></button>`).join('');
     $('#history-panel').hidden = !state.history.length;
     $('#return-claim').hidden = !(state.waiting && !state.ending);
+    $('#search-objective').hidden = !state.original || !!state.ending;
+    $('#objective-name').textContent = state.original;
     renderGuide();
   }
   function setMeta(text) { $('#result-meta').hidden = false; $('#result-meta').textContent = text; }
@@ -291,6 +296,33 @@
     if (!$('#modal').open) $('#modal').showModal();
     const firstField = $('#modal-body').querySelector('input:not([readonly])');
     if (firstField) firstField.focus();
+  }
+  function hasStarted() { return !!(state.original || state.seen.length || state.history.length || state.ending); }
+  function openIntro(replay = false) {
+    if ($('#intro').open) return;
+    introTrigger = document.activeElement;
+    $('#intro').dataset.replay = String(replay);
+    $('#intro-form').hidden = replay;
+    $('#intro-skip').hidden = replay;
+    $('#intro-return').hidden = !replay;
+    if (!replay) $('#intro-item').value = '钱包';
+    $('#intro-error').hidden = true;
+    $('#intro-item').removeAttribute('aria-invalid');
+    $('#close-intro').setAttribute('aria-label', replay ? '关闭入站小记，回到当前查档' : '略过引子，进入页面');
+    $('#intro').showModal();
+    $('#intro-title').focus({ preventScroll: true });
+    $('#intro').scrollTop = 0;
+  }
+  function closeIntro() {
+    if (!$('#intro').open) return;
+    $('#intro').close();
+  }
+  function rememberIntro() {
+    introSeen = true;
+    try { localStorage.setItem(introKey, 'read'); } catch { storageAvailable = false; }
+    const parentDialog = introTrigger?.closest?.('dialog');
+    if (introTrigger?.isConnected && introTrigger !== document.body && (!parentDialog || parentDialog.open)) introTrigger.focus({ preventScroll: true });
+    else $('#search').focus({ preventScroll: true });
   }
   function showItem(id) {
     if (id === '0001') {
@@ -395,10 +427,25 @@
     }
     if (event.target.closest('#confirm-reset')) {
       cancelPending(); endingId++; submitting = false; state = fresh(); save();
-      $('#modal').close(); home(); toast('本机记录已清除，可以重新开始寻找。');
+      introSeen = false;
+      try { localStorage.removeItem(introKey); } catch { storageAvailable = false; }
+      $('#modal').close(); home(); openIntro(); toast('本机记录已清除，可以重新开始寻找。');
     }
   });
   $('#modal').addEventListener('close', () => { if (modalTrigger?.isConnected) modalTrigger.focus({ preventScroll: true }); });
+  $('#read-intro').addEventListener('click', () => openIntro(true));
+  $('#close-intro').addEventListener('click', closeIntro);
+  $('#intro-skip').addEventListener('click', closeIntro);
+  $('#intro-return').addEventListener('click', closeIntro);
+  $('#intro').addEventListener('close', rememberIntro);
+  $('#intro').addEventListener('cancel', event => { event.preventDefault(); closeIntro(); });
+  $('#intro-form').addEventListener('submit', event => {
+    event.preventDefault();
+    if (!$('#intro').open || $('#intro').dataset.replay === 'true') return;
+    const property = $('#intro-item').value.trim().slice(0,40);
+    if (!property) { $('#intro-error').hidden = false; $('#intro-item').setAttribute('aria-invalid','true'); $('#intro-item').focus(); return; }
+    closeIntro(); search(property); $('#search').focus({ preventScroll: true });
+  });
   $('#show-all').addEventListener('click', () => home(true));
   $('#hint-toggle').addEventListener('click', () => {
     const id = currentHint(); if (!id) return;
@@ -464,8 +511,10 @@
     state = readState(event.newValue);
     if ($('#modal').open) $('#modal').close();
     if ($('#ending').open) $('#ending').close();
+    if ($('#intro').open) closeIntro();
     home(); toast('本机记录已在另一个页面更新。');
   });
   home();
+  if (!introSeen && !hasStarted()) openIntro();
   if (!storageAvailable) toast('浏览器未允许本地保存，本次进度仅在当前页面有效。');
 })();
