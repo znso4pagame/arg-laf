@@ -51,6 +51,10 @@
   function modal(title, html) {
     $("#modal-label").textContent = title;
     $("#modal-body").innerHTML = html;
+    $("#modal").classList.toggle(
+      "comparison-dialog",
+      !!$("#modal-body .comparison-columns"),
+    );
     if (!$("#modal").open) $("#modal").showModal();
   }
   function fileBody(file) {
@@ -66,6 +70,15 @@
   }
   function updateChrome() {
     const s = store.read();
+    let guide = $("#journey-guide");
+    if (!guide) {
+      guide = document.createElement("section");
+      guide.id = "journey-guide";
+      guide.className = "journey-guide";
+      guide.setAttribute("aria-label", "当前调查目标");
+      $(".content-grid").before(guide);
+    }
+    window.ZHAOHUI_GUIDE.render(guide, s, { page: "main" });
     $("#staff-count").textContent =
       s.ending === "left" ? "本站员工：0" : "本站员工：1";
     $("#search-objective").hidden = !s.goal || !!s.ending;
@@ -133,7 +146,11 @@
   }
   function whisper() {
     const s = store.read();
-    if (s.ending || !has("anomaly")) return;
+    if (
+      s.ending ||
+      !(has("anomaly") || has("clause") || s.flags.includes("verified"))
+    )
+      return;
     const q = matcher.fold($("#search").value);
     const stage = s.flags.includes("verified")
       ? "truth"
@@ -337,7 +354,10 @@
       panel.id = "application-panel";
       $(".content-grid").after(panel);
     }
-    panel.hidden = !s.flags.includes("staff") || !has("anomaly") || !!s.ending;
+    panel.hidden =
+      !s.flags.includes("staff") ||
+      !(has("anomaly") || has("clause") || s.flags.includes("verified")) ||
+      !!s.ending;
     panel.innerHTML = `<h2>特殊人员认领申请</h2><p>员工站附件关联到客服 0001 的人员认领。这不是你失物的领取单。${s.flags.includes("verified") ? "你已经完成归档关系核验。" : "资料尚未全部核对，可以继续调查后再决定。"}</p><a href="danny.html#archive">回归档室核对材料 &gt;&gt;</a><form id="claim-form" class="claim-form"><label>认领对象<input value="小鹿 / 客服 0001" readonly></label><label>认领人姓名<input name="name" required maxlength="30" autocomplete="off"></label><label class="claim-terms">认领人承担该对象在系统中遗留的全部责任、义务与岗位职责。提交前将再次核对。</label><button class="record-action" type="submit">核对并准备签署</button><button class="text-link" type="button" id="leave">放弃本次认领</button></form>`;
   }
   function renderMine() {
@@ -383,7 +403,7 @@
     const keys = [...new Set(files.flatMap((c) => c.fields.map((x) => x[0])))];
     modal(
       "我的 · 材料对照",
-      `<h2>两份已取得材料</h2><div class="comparison-columns">${files.map((c) => `<section><h3>${esc(c.title)}</h3>${fileBody(c)}</section>`).join("")}</div>${keys.length ? `<table class="comparison-table"><thead><tr><th>字段</th>${files.map((c) => `<th>${esc(c.title)}</th>`).join("")}</tr></thead><tbody>${keys.map((k) => `<tr><th>${esc(k)}</th>${files.map((c) => `<td>${esc(c.fields.find((x) => x[0] === k)?.[1] || "未记录")}</td>`).join("")}</tr>`).join("")}</tbody></table>` : ""}<p>对照不会替你作出判断。可以把推测写进每份材料的备注。</p>`,
+      `<h2>两份已取得材料</h2><div class="comparison-columns">${files.map((c) => `<section><h3>${esc(c.title)}</h3>${fileBody(c)}</section>`).join("")}</div>${keys.length ? `<div class="comparison-table-scroll" tabindex="0" role="region" aria-label="材料字段对照"><table class="comparison-table"><thead><tr><th>字段</th>${files.map((c) => `<th>${esc(c.title)}</th>`).join("")}</tr></thead><tbody>${keys.map((k) => `<tr><th>${esc(k)}</th>${files.map((c) => `<td>${esc(c.fields.find((x) => x[0] === k)?.[1] || "未记录")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : ""}<p>对照不会替你作出判断。可以把推测写进每份材料的备注。</p>`,
     );
   }
   function review(ending, name = "") {
@@ -396,6 +416,17 @@
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button,a");
     if (!b) return;
+    const localTarget =
+      b.tagName === "A" &&
+      /^index\.html#(mine|application|search)$/.exec(
+        b.getAttribute("href") || "",
+      );
+    if (localTarget && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      e.preventDefault();
+      const hash = "#" + localTarget[1];
+      if (location.hash !== hash) history.pushState(null, "", hash);
+      navigateToHash(hash);
+    }
     if (b.dataset.search) {
       e.preventDefault();
       if ($("#modal").open) $("#modal").close();
@@ -758,13 +789,36 @@
   syncAssist();
   if (savedQuery)
     search(savedQuery, { record: !store.read().searchHistory.length });
-  if (location.hash === "#mine") renderMine();
-  if (!store.read().introduced) $("#intro").showModal();
-  if (
-    location.hash === "#application" &&
-    store.read().flags.includes("staff")
-  ) {
-    $("#application-panel").scrollIntoView?.({ block: "start" });
-    whisper();
+  function navigateToHash(hash) {
+    if ($("#modal").open) $("#modal").close();
+    if (hash === "#mine") {
+      renderMine();
+      $("#results-title").scrollIntoView?.({ block: "start" });
+      return;
+    }
+    if (hash === "#application") {
+      document.body.classList.remove("notebook-mode");
+      renderResults($("#search").value);
+      updateChrome();
+      if (!$("#application-panel").hidden) {
+        $("#application-panel").scrollIntoView?.({ block: "start" });
+        whisper();
+      }
+      return;
+    }
+    if (hash === "#search" || !hash) {
+      document.body.classList.remove("notebook-mode");
+      const query = $("#search").value;
+      if (query) search(query, { record: false });
+      else home({ remember: false });
+      if (hash) {
+        $(".search-section").scrollIntoView?.({ block: "start" });
+        $("#search").focus({ preventScroll: true });
+      }
+    }
   }
+  window.addEventListener("hashchange", () => navigateToHash(location.hash));
+  if (!store.read().introduced) $("#intro").showModal();
+  if (["#mine", "#application", "#search"].includes(location.hash))
+    navigateToHash(location.hash);
 })();

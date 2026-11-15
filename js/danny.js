@@ -88,6 +88,18 @@
         .map(([key, f]) => ({ ...f, key }));
     function chrome() {
       const logged = staff();
+      let guide = $("#journey-guide");
+      if (!guide) {
+        guide = d.createElement("section");
+        guide.id = "journey-guide";
+        guide.className = "journey-guide";
+        guide.setAttribute("aria-label", "当前调查目标");
+        $(".site-grid").before(guide);
+      }
+      w.ZHAOHUI_GUIDE.render(guide, store.read(), {
+        page: "danny",
+        staffSession: logged,
+      });
       $("#permission-label").textContent = logged
         ? "员工模式 / Danny"
         : "游客浏览";
@@ -146,6 +158,10 @@
         if (w.location.hash !== target) w.history.pushState(null, "", target);
       }
       if (key === "intake") store.collect(files.anomaly);
+      w.ZHAOHUI_GUIDE.render($("#journey-guide"), store.read(), {
+        page: "danny",
+        staffSession: staff(),
+      });
       status("已保存：" + f.title);
       if (focus) {
         pane.focus({ preventScroll: true });

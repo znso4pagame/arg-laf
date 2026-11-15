@@ -769,3 +769,110 @@ test("多个检索条件必须同时满足，导出的个人备注也在已知�
     false,
   );
 });
+
+test("查档来由、当前目标和来源衔接明确，开场不直接给出 Danny 入口", (t) => {
+  const a = boot(t);
+  assert.match(a.$("#intro-description").textContent, /旧馆站/);
+  assert.match(a.$("#journey-guide").textContent, /核对那份旧登记/);
+  assert.equal(a.$('#journey-guide a[href^="danny"]'), null);
+  a.click("#intro-skip");
+  a.click("#journey-guide [data-search]");
+  assert.equal(a.$("#search").value, "旧馆站");
+  assert.ok(a.$('[data-item="0810"]'));
+  a.click('[data-item="0816"]');
+  a.click('[data-save-record="0816"]');
+  assert.match(a.$("#journey-guide").textContent, /追查登记的移交来源/);
+  assert.equal(a.$('#journey-guide a[href^="danny"]'), null);
+});
+test("员工目标明确列出两条并行线，实际读完对应原文才标记完成", (t) => {
+  const local = memory(),
+    session = memory(),
+    a = boot(t, "danny", local, session);
+  assert.match(a.$("#journey-guide").textContent, /确认 Danny 的访问身份/);
+  a.click("[data-tab=account]");
+  a.set("[name=account]", "danny.late");
+  a.set("[name=password]", "west1103");
+  a.submit("#login-form");
+  assert.equal(a.d.querySelectorAll(".journey-tasks li").length, 2);
+  assert.ok(
+    [...a.d.querySelectorAll(".journey-tasks small")].every(
+      (x) => x.textContent === "待核对",
+    ),
+  );
+  repair(a);
+  assert.equal(a.$(".journey-tasks li small").textContent, "已核对");
+  assert.match(a.$("#journey-guide a").getAttribute("href"), /#work/);
+  const b = boot(t, "danny", local, memory(), "#work");
+  assert.match(b.$("#journey-guide").textContent, /恢复员工身份/);
+});
+test("材料对照使用独立宽弹窗和表格滚动区，切换普通弹窗会恢复布局", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.collect(data.files.municipalA);
+  store.collect(data.files.municipalB);
+  const a = boot(t, "index", local, memory(), "#mine");
+  for (const box of a.d.querySelectorAll("[data-compare]")) box.click();
+  a.click("#compare-files");
+  assert.ok(a.$("#modal").classList.contains("comparison-dialog"));
+  assert.ok(a.$(".comparison-table-scroll table"));
+  assert.equal(a.$(".comparison-table-scroll").getAttribute("tabindex"), "0");
+  a.click("#close-modal");
+  a.click("#new-note");
+  assert.ok(!a.$("#modal").classList.contains("comparison-dialog"));
+});
+test("目标不通过查看提示解锁，不泄露未取得的凭证答案", () => {
+  const guide = require("../journey-guide.js"),
+    state = makeStore(memory()).read();
+  const start = guide.describe(state);
+  assert.equal(start.query, "旧馆站");
+  assert.ok(!JSON.stringify(start).includes("west1103"));
+  assert.equal(state.flags.length, 0);
+  state.clues.push(data.files.trace);
+  assert.equal(guide.describe(state).index, 2);
+  state.flags.push("staff", "timeline");
+  assert.equal(guide.describe(state).tasks[0].done, false);
+  state.clues.push(data.files.conversation);
+  assert.equal(guide.describe(state).tasks[0].done, true);
+  state.flags.push("verified");
+  assert.equal(guide.describe(state).url, "index.html#application");
+  state.ending = "left";
+  assert.equal(guide.describe(state).url, "index.html#mine");
+});
+
+test("调查材料可以不同顺序查阅，绕过查询快照仍能在完整核验后作最后选择", (t) => {
+  const local = memory(),
+    session = memory(),
+    site = cabinet(t, local, session);
+  compare(site);
+  for (const key of ["signed", "relist", "clause"])
+    site.click("[data-read=" + key + "]");
+  repair(site);
+  chain(site);
+  assert.ok(site.state().flags.includes("verified"));
+  assert.ok(!site.state().clues.some((x) => x.id === "anomaly"));
+  const main = boot(t, "index", local, session, "#application");
+  assert.equal(main.$("#application-panel").hidden, false);
+  assert.match(main.$("#suggestions").textContent, /你自己选/);
+  assert.equal(
+    main.$("#journey-guide a").getAttribute("href"),
+    "index.html#application",
+  );
+});
+
+test("当前目标的站内跳转立即生效，材料副本可以直接回到最终申请", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.mark("verified");
+  store.collect(data.files.truth);
+  const a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.click('#journey-guide a[href="index.html#mine"]');
+  assert.ok(a.d.body.classList.contains("notebook-mode"));
+  a.click("[data-file=truth]");
+  a.click('#modal-body a[href="index.html#application"]');
+  assert.ok(!a.d.body.classList.contains("notebook-mode"));
+  assert.equal(a.$("#modal").open, false);
+  assert.equal(a.$("#application-panel").hidden, false);
+  assert.equal(a.w.location.hash, "#application");
+});
