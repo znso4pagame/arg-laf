@@ -6,7 +6,8 @@
   const fold = (v) => String(v ?? "").normalize("NFKC").toLowerCase()
     .replace(/[\p{White_Space}\p{Punctuation}\p{Symbol}]/gu, "");
   const scripts = {
-    reception: ["我是小鹿，先替你查。", "别只对名称，也看看描述。", "找不到的话，先别关。"],
+    lost: ["我也丢过一样东西。", "能透光，装在纸里。", "包纸的一角是焦的。"],
+    reception: ["我是小鹿，先替你查。", "别只对名称，也看看描述。", "你捡过什么东西吗？"],
     identity: ["不是自动回复。我叫小鹿。", "这里只有我值班。", "我只能在这些建议里写字。"],
     help: ["你能看到我写的字吗？", "帮帮我。", "先别问表格，陪我说两句。"],
     where: ["B3。这里没有窗。", "我出不去。", "你在外面，能看见比我多的东西。"],
@@ -25,9 +26,17 @@
     trust: ["你在他那里看见什么了？", "有些事我不知道怎么说。", "你先别填姓名。"],
   };
   function next(query, state, { itemMatch = false } = {}) {
-    if (state.ending || state.flags.includes("staff") || state.flags.includes("verified") ||
-      state.clues.some((c) => ["clause", "conversation"].includes(c.id))) return null;
     const q = fold(query);
+    if (state.ending || state.clues.some((c) => c.id.startsWith("whisper-truth"))) return null;
+    const lostQuery = /你捡过|你也丢|你丢了什么|捡到的|你的失物|你的东西|还给你/.test(q) ||
+      scripts.lost.some((line) => fold(line) === q);
+    if (lostQuery) {
+      if (state.belongings?.returned) return null;
+      const i = scripts.lost.findIndex((_, i) => !state.clues.some((c) => c.id === `xiaolu-arrival-lost-${i}`));
+      return i < 0 ? null : { id: `xiaolu-arrival-lost-${i}`, text: scripts.lost[i], context: "lost" };
+    }
+    if (state.flags.includes("staff") || state.flags.includes("verified") ||
+      state.clues.some((c) => ["clause", "conversation"].includes(c.id))) return null;
     if (!q || /^(系统|网站|算法|天气|system)$/.test(q)) return null;
     const has = (id) => state.clues.some((c) => c.id === id);
     const familiar = state.clues.some((c) => c.id.startsWith("xiaolu-"));

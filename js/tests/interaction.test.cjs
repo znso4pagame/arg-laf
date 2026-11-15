@@ -1831,10 +1831,10 @@ test("小鹿从第一次普通失物查询就出现，每次一句并可点击�
   a.click('#suggestions .suggestion-response');
   assert.match(a.$('#suggestions').textContent, /别只对名称/);
   a.click('#suggestions .suggestion-response');
-  assert.match(a.$('#suggestions').textContent, /先别关/);
+  assert.match(a.$('#suggestions').textContent, /你捡过什么/);
   a.click('#suggestions .suggestion-response');
-  assert.equal(a.$('#suggestions').hidden, true);
-  assert.equal(a.state().clues.filter((c) => c.id.startsWith('xiaolu-')).length, 3);
+  assert.match(a.$('#suggestions').textContent, /我也丢过/);
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith('xiaolu-')).length, 4);
   assert.ok(!a.state().flags.includes('staff'));
   assert.equal(a.$('#application-panel').hidden, true);
 });
@@ -1905,4 +1905,124 @@ test("回退查询与从收藏返回不会替玩家消耗小鹿下一句", (t) =
   assert.equal(a.state().clues.length, before);
   a.search('你是谁');
   assert.match(a.$('#suggestions').textContent, /只有我/);
+});
+
+function describeFound(a) {
+  for (let i = 0; i < 3; i++) a.search('你丢了什么');
+  assert.ok(a.state().clues.some((c) => c.id === 'xiaolu-arrival-lost-2'));
+}
+function offerFound(a, id) {
+  a.click('[data-nav=mine]');
+  a.click(`[data-inspect-found="${id}"]`);
+  a.click(`[data-return-found="${id}"]`);
+}
+test("随身三件拾获物需先检查并听完失物特征，不改变玩家自己的目标", (t) => {
+  const a = boot(t);
+  a.click('#intro-skip');
+  a.click('[data-nav=mine]');
+  assert.equal(a.d.querySelectorAll('.found-object').length, 3);
+  assert.doesNotMatch(a.$('.found-pocket').textContent, /焦黑/);
+  a.click('[data-inspect-found=packet]');
+  assert.match(a.$('#modal-body').textContent, /焦黑/);
+  assert.equal(a.$('[data-return-found=packet]').disabled, true);
+  assert.equal(a.state().belongings.returned, false);
+  a.click('#close-modal');
+  assert.equal(a.d.activeElement.dataset.inspectFound, 'packet');
+  describeFound(a);
+  assert.equal(a.state().goal, '');
+  a.search('钱包');
+  describeFound(a);
+  assert.equal(a.state().goal, '钱包');
+  assert.match(a.$('#suggestions').textContent, /已保存/);
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith('xiaolu-arrival-lost')).length, 3);
+});
+test("交错物品保留在袋中并给出具体回应，同一错误不重复说话", (t) => {
+  const a = boot(t);
+  a.click('#intro-skip');
+  describeFound(a);
+  offerFound(a, 'key');
+  assert.match(a.$('#suggestions .suggestion-response').textContent, /没有齿/);
+  assert.equal(a.state().belongings.returned, false);
+  assert.ok(!a.state().clues.some((c) => c.id === 'found-return-receipt'));
+  offerFound(a, 'key');
+  assert.equal(a.$('#suggestions .suggestion-response'), null);
+  assert.match(a.$('#suggestions').textContent, /此前已核对/);
+  offerFound(a, 'sleeve');
+  assert.match(a.$('#suggestions .suggestion-response').textContent, /烧痕/);
+  assert.equal(a.state().belongings.returned, false);
+  a.click('[data-nav=mine]');
+  assert.match(a.$('#found-title').textContent, /3 件/);
+});
+test("交还正确物品保存回执并开放 Danny 的关键便笺，仍需自己解员工凭证", (t) => {
+  const local = memory(), a = boot(t, 'index', local);
+  a.click('#intro-skip');
+  describeFound(a);
+  offerFound(a, 'packet');
+  assert.equal(a.state().belongings.returned, true);
+  assert.match(a.$('#suggestions').textContent, /是这颗/);
+  assert.equal(a.state().clues.filter((c) => c.id === 'found-return-receipt').length, 1);
+  assert.ok(!a.state().flags.includes('staff'));
+  assert.equal(a.$('#application-panel').hidden, true);
+  a.click('[data-nav=mine]');
+  assert.match(a.$('#found-title').textContent, /2 件/);
+  a.click('[data-inspect-found=packet]');
+  assert.equal(a.$('[data-return-found]'), null);
+  const b = boot(t, 'danny', local, memory(), '#journal--return-note');
+  assert.match(b.$('#reading-pane').textContent, /两边没有同步/);
+  assert.ok(b.state().clues.some((c) => c.id === 'return-note'));
+  assert.ok(!b.$('[data-read=night]'));
+  const reload = boot(t, 'index', local, memory(), '#mine');
+  assert.match(reload.$('#found-title').textContent, /2 件/);
+  assert.equal(reload.state().belongings.returned, true);
+});
+test("未交还的游客不能通过深链接和站内搜索偷看奖励便笺", (t) => {
+  const a = boot(t, 'danny', memory(), memory(), '#journal--return-note');
+  assert.ok(!a.state().clues.some((c) => c.id === 'return-note'));
+  assert.doesNotMatch(a.$('#reading-pane').textContent, /两边没有同步/);
+  a.set('#site-search', '对钟'); a.submit('#site-search-form');
+  assert.ok(!a.$('.entry-list [data-read=return-note]'));
+});
+test("另一个窗口交还后 Danny 游客目录会开放奖励，错误物品不会解锁", (t) => {
+  const local = memory(), a = boot(t, 'index', local);
+  a.click('#intro-skip');
+  const b = boot(t, 'danny', local);
+  assert.ok(!b.$('.entry-list [data-read=return-note]'));
+  describeFound(a); offerFound(a, 'sleeve');
+  b.w.dispatchEvent(new b.w.StorageEvent('storage', { key: b.w.ZHAOHUI_JOURNEY.key }));
+  assert.ok(!b.$('.entry-list [data-read=return-note]'));
+  offerFound(a, 'packet');
+  b.w.dispatchEvent(new b.w.StorageEvent('storage', { key: b.w.ZHAOHUI_JOURNEY.key }));
+  assert.ok(b.$('.entry-list [data-read=return-note]'));
+});
+test("注销重置物品和奖励，旧轮次交还与终局后的交还不会改写存档", (t) => {
+  const local = memory(), store = makeStore(local);
+  store.update((s) => { s.introduced = true; });
+  store.inspectFound('packet');
+  store.collect({ id: 'xiaolu-arrival-lost-2', title: '包纸的一角是焦的。', kind: 'message' });
+  const old = store.read().runToken;
+  store.reset();
+  store.update((s) => { s.introduced = true; });
+  store.inspectFound('packet');
+  store.collect({ id: 'xiaolu-arrival-lost-2', title: '包纸的一角是焦的。', kind: 'message' });
+  assert.equal(store.returnFound('packet', old).outcome, 'blocked');
+  assert.equal(store.read().belongings.returned, false);
+  assert.equal(store.returnFound('unknown', store.read().runToken).outcome, 'blocked');
+  store.mark('staff'); store.finish('left');
+  assert.equal(store.returnFound('packet', store.read().runToken).outcome, 'blocked');
+  store.reset();
+  assert.deepEqual(store.read().belongings, { inspected: [], returned: false });
+  assert.ok(!store.read().clues.some((c) => c.id === 'found-return-receipt'));
+});
+
+test("较多既有收藏不会挤掉新增物品回执，奖励可在完整调查后保存", (t) => {
+  const local = memory(), store = makeStore(local);
+  store.update((s) => {
+    s.introduced = true;
+    s.clues = Array.from({ length: 100 }, (_, i) => ({ id: 'existing-' + i, title: '已取得材料 ' + i, kind: 'record', body: [] }));
+  });
+  const a = boot(t, 'index', local);
+  describeFound(a);
+  offerFound(a, 'packet');
+  assert.ok(a.state().clues.some((c) => c.id === 'found-return-receipt'));
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith('existing-')).length, 100);
 });

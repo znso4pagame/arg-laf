@@ -87,6 +87,7 @@
       const f = files[key];
       return (
         !!f?.tab &&
+        (key !== "return-note" || store.read().belongings.returned) &&
         (f.access === "guest" ||
           (staff() &&
             ((f.access === "staff" &&
@@ -128,9 +129,9 @@
         .filter(([key]) => canRead(key) && key !== "door-back")
         .map(([key, f]) => ({ ...f, key }));
     function progressSignature() {
-      return staff()
+      return String(store.read().belongings.returned) + ":" + (staff()
         ? ["cabinet", "compared", "timeline", "verified"].map(flag).join("|")
-        : "guest:" + String(store.read().introduced);
+        : "guest:" + String(store.read().introduced));
     }
     function refreshReadMarkers() {
       d.querySelectorAll(".entry-list [data-read]").forEach((b) => {

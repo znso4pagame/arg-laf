@@ -2343,3 +2343,26 @@ body > .utility {
     min-height: 32px;
   }
 }
+
+/* 随身袋沿用旧门户的物品目录，不把物品交还混进人员申请。 */
+.found-pocket {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid #a7bac9;
+  background: #f3f6f8;
+}
+.found-pocket-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; }
+.found-pocket-head h3 { margin: 0; font-size: 16px; }
+.found-pocket-head > span, .found-object > span { font-size: 12px; color: #627784; }
+.found-pocket p { line-height: 1.8; }
+.found-pocket-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.found-object { min-width: 0; padding: 12px; background: #fff; border: 1px solid #bdcbd5; }
+.found-object h4 { margin: 8px 0; font-size: 14px; }
+.found-object p { font-size: 13px; }
+.found-object button { padding: 6px 10px; border: 1px solid #a4b8c8; background: #edf2f6; }
+.found-observation { border-top: 1px dotted #bdcbd5; padding-top: 8px; }
+.found-suggestion-link { display: block; padding: 10px 15px; color: #245d8e; text-decoration: underline; }
+.found-system-note { margin: 8px 15px; font-size: 12px; line-height: 1.8; color: #627784; }
+.found-receipt-link { margin-bottom: 0; text-decoration: underline; }
+@media (max-width: 760px) { .found-pocket-grid { grid-template-columns: 1fr; } }
+.suggestions > a.suggestion-response { display: block; text-decoration: underline; }

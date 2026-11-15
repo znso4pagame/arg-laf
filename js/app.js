@@ -55,6 +55,7 @@
   function modal(title, html) {
     $("#modal-label").textContent = title;
     motion.cancelTree($("#modal-body"));
+    delete $("#modal-body").dataset.foundItem;
     $("#modal-body").innerHTML = html;
     $("#modal").classList.toggle(
       "comparison-dialog",
@@ -158,18 +159,68 @@
         )
         .join("");
   }
+  function foundPocket(s) {
+    if (!s.introduced) return "";
+    const ready = has("xiaolu-arrival-lost-2");
+    return `<section class="found-pocket" aria-labelledby="found-title"><div class="found-pocket-head"><h3 id="found-title" tabindex="-1">随身拾获物 / ${s.belongings.returned ? 2 : 3} 件待交还</h3><span>旧馆站 · 尚未上交</span></div><p>折返时捡到的三样东西。先检查细节，再和失主的描述核对；交还物品无需填写姓名。</p>${!s.ending && !s.clues.some((c) => c.id.startsWith("whisper-truth")) && !s.belongings.returned ? `<button type="button" class="text-link" data-search="你丢了什么">${ready ? "复查小鹿的失物描述" : "问问小鹿丢了什么"}</button>` : ""}<div class="found-pocket-grid">${data.foundItems.map((item) => `<article class="found-object"><span>${item.id === "packet" && s.belongings.returned ? "已交还给小鹿" : "待核实失主"}</span><h4>${esc(item.title)}</h4><p>${esc(item.summary)}</p>${s.belongings.inspected.includes(item.id) ? `<p class="found-observation">${esc(item.details)}</p>` : ""}<button type="button" data-inspect-found="${item.id}">${s.belongings.inspected.includes(item.id) ? "再次查看" : "拿出来检查"}</button></article>`).join("")}</div>${s.belongings.returned ? '<p class="found-receipt-link"><a href="danny.html#journal--return-note">查看小鹿给出的来访便笺 &gt;&gt;</a></p>' : ""}</section>`;
+  }
+  function inspectFound(id) {
+    const item = data.foundItems.find((x) => x.id === id);
+    if (!item) return;
+    const s = store.inspectFound(id);
+    if (document.body.classList.contains("notebook-mode")) renderMine();
+    const active = s.introduced && !s.ending && !s.belongings.returned &&
+      !s.clues.some((c) => c.id.startsWith("whisper-truth"));
+    modal("随身拾获物 / " + item.title,
+      `<h2>${esc(item.title)}</h2><p>${esc(item.details)}</p><p>${s.belongings.returned && id === "packet" ? "旧纸包与玻璃珠已交还，检查记录仍可回看。" : "物品还在你的随身袋中。"}</p>${active ? `<p>${has("xiaolu-arrival-lost-2") ? "与失主的描述核对后，可登记交还。" : "尚未听完失物特征，先向小鹿核实。"}</p><button type="button" class="record-action" data-return-found="${id}" data-run="${esc(s.runToken)}" ${has("xiaolu-arrival-lost-2") ? "" : "disabled"}>交还给小鹿</button><button type="button" class="text-link" data-search="你丢了什么">询问失物特征</button>` : ""}<p><a href="index.html#mine" data-pocket-focus>回到随身拾获物 &gt;&gt;</a></p>`);
+    $("#modal-body").dataset.foundItem = id;
+  }
+  function handOverFound(button) {
+    const item = data.foundItems.find((x) => x.id === button.dataset.returnFound);
+    if (!item) return;
+    const result = store.returnFound(item.id, button.dataset.run);
+    if (result.outcome === "blocked" || result.outcome === "already") {
+      button.disabled = true;
+      toast(result.outcome === "already" ? "本轮交还已经完成，请回随身袋查看回执。" : "物品或查档状态已更新，请重新核对。");
+      return;
+    }
+    const success = result.outcome === "returned";
+    if (success) store.collect(data.files["found-receipt"]);
+    const id = "found-response-" + item.id;
+    const spoken = has(id);
+    if (!spoken) store.collect({ id, kind: "message", title: "查询建议 / 物品核对",
+      source: "找回网 · 实际显示的查询建议", body: [item.reply], summary: item.reply });
+    $("#modal").close();
+    search("交还 " + item.title, { respond: false });
+    motion.cancelTree($("#suggestions"));
+    $("#suggestions").hidden = false;
+    $("#suggestions").innerHTML = (spoken ? '<p class="found-system-note">这件物品此前已核对，不符合失主描述，仍保留在随身袋中。</p>' : `<${success ? 'a href="danny.html#journal--return-note"' : "div"} class="suggestion-response">${esc(item.reply)}</${success ? "a" : "div"}>`) +
+      (success ? '<p class="found-system-note">已交还旧纸包与蓝玻璃珠。小鹿提供的便笺索引与回执已收入“我的”。</p><a class="found-suggestion-link" href="danny.html#journal--return-note">打开小鹿给出的旧地址 &gt;&gt;</a>' : '') +
+      '<a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>回到随身拾获物 &gt;&gt;</a>';
+    motion.enter($("#suggestions"));
+    $("#suggestions").scrollIntoView?.({ block: "nearest" });
+    updateChrome();
+  }
   function earlyWhisper(s) {
     const query = $("#search").value;
     const records = searchIndex.matches(query, data.items);
     const reply = window.ZHAOHUI_XIAOLU.next(query, s, { itemMatch: records.length > 0 });
-    if (!reply) return false;
+    if (!reply) {
+      if (!s.ending && !s.clues.some((c) => c.id.startsWith("whisper-truth")) &&
+        /你丢了什么|你的失物/.test(matcher.fold(query)) && has("xiaolu-arrival-lost-2")) {
+        $("#suggestions").hidden = false;
+        $("#suggestions").innerHTML = '<p class="found-system-note">已保存的失物描述：能透光，装在纸里；包纸的一角是焦的。</p><a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>查看随身拾获物 &gt;&gt;</a>';
+      }
+      return false;
+    }
     const ordinary = searchIndex.related(records, query).slice(0, 2);
     motion.cancelTree($("#suggestions"));
     $("#suggestions").hidden = false;
     $("#suggestions").innerHTML =
       ordinary.slice(0, 1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("") +
       `<button type="button" class="suggestion-response" data-search="${esc(reply.text)}" title="用这句话继续查询">${esc(reply.text)}</button>` +
-      ordinary.slice(1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("");
+      ordinary.slice(1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("") +
+      (reply.context === "lost" ? '<a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>查看随身拾获物 &gt;&gt;</a>' : "");
     motion.enter($("#suggestions"), { items: ".suggestion-response" });
     store.collect({
       id: reply.id, kind: "message", title: "查询建议 / " + reply.text,
@@ -187,6 +238,10 @@
       return;
     }
     const q = matcher.fold($("#search").value);
+    if (/你捡过|你也丢|你丢了什么|捡到的|你的失物|你的东西|还给你|能透光装在纸里|包纸的一角是焦的|我也丢过一样东西/.test(q)) {
+      earlyWhisper(s);
+      return;
+    }
     const stage = s.flags.includes("verified")
       ? "truth"
       : has("conversation")
@@ -388,7 +443,8 @@
         s.searchHistory = s.searchHistory.slice(-12);
         s.searchCursor = s.searchHistory.length - 1;
       }
-      if (!s.goal && !/^(你好|谢谢|天气|系统)$/.test(query)) s.goal = query;
+      if (!s.goal && !/^(你好|谢谢|天气|系统)$/.test(query) &&
+        !/^(你丢了什么|你的失物|你的东西|你捡过|我也丢过|能透光|包纸|交还)/.test(matcher.fold(query))) s.goal = query;
     });
     renderResults(query);
     updateChrome();
@@ -445,7 +501,7 @@
     const notes = searchIndex.matches(mineQuery, s.notes);
     motion.cancelTree($("#results"));
     $("#results").innerHTML =
-      `<section class="notebook"><div class="notebook-top"><p>这里保存已经取得的材料。个人备注仅代表推测，不会自动解锁剧情。</p><button class="text-link" id="notebook-return">返回查阅 &gt;&gt;</button></div><form id="notebook-search-form" class="notebook-search"><label class="sr-only" for="notebook-search">搜索收藏与备注</label><input id="notebook-search" value="${esc(mineQuery)}" placeholder="搜索标题、正文、字段和自己的备注" maxlength="80"><button>查找材料</button>${mineQuery ? '<button type="button" id="clear-notebook-search">清除筛选</button>' : ""}</form><div class="notebook-tabs">${[
+      `<section class="notebook">${foundPocket(s)}<div class="notebook-top"><p>这里保存已经取得的材料。个人备注仅代表推测，不会自动解锁剧情。</p><button class="text-link" id="notebook-return">返回查阅 &gt;&gt;</button></div><form id="notebook-search-form" class="notebook-search"><label class="sr-only" for="notebook-search">搜索收藏与备注</label><input id="notebook-search" value="${esc(mineQuery)}" placeholder="搜索标题、正文、字段和自己的备注" maxlength="80"><button>查找材料</button>${mineQuery ? '<button type="button" id="clear-notebook-search">清除筛选</button>' : ""}</form><div class="notebook-tabs">${[
         ["all", "全部"],
         ["page", "页面"],
         ["record", "档案"],
@@ -496,7 +552,10 @@
       if (hash === "#search") $("#search").value = displayedQuery;
       commitView(hash);
       navigateToHash(hash);
+      if (b.hasAttribute("data-pocket-focus")) $("#found-title")?.focus();
     }
+    if (b.dataset.inspectFound) inspectFound(b.dataset.inspectFound);
+    if (b.dataset.returnFound) handOverFound(b);
     if (b.dataset.search) {
       e.preventDefault();
       if ($("#modal").open) $("#modal").close();
@@ -950,6 +1009,9 @@
   });
   $("#modal").addEventListener("close", () => {
     motion.cancelTree($("#modal-body"));
+    const item = $("#modal-body").dataset.foundItem;
+    if (item && document.body.classList.contains("notebook-mode"))
+      document.querySelector(`[data-inspect-found="${item}"]`)?.focus({ preventScroll: true });
     pendingChoice = null;
   });
   const startupState = history.state;

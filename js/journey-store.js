@@ -30,6 +30,7 @@
       timeline: ["draft", "test", "door", "keys", "reply", "wall"],
       included: ["draft", "test", "door", "keys", "reply", "wall"],
     },
+    belongings: { inspected: [], returned: false },
     ending: "",
     name: "",
     flags: [],
@@ -112,6 +113,11 @@
       state.danny.included = [
         ...new Set(raw.danny.included.filter((id) => eventIds.includes(id))),
       ];
+    state.belongings = {
+      inspected: [...new Set((Array.isArray(raw.belongings?.inspected) ? raw.belongings.inspected : [])
+        .filter((id) => ["key", "packet", "sleeve"].includes(id)))],
+      returned: raw.belongings?.returned === true,
+    };
     state.ending = ["claimed", "left"].includes(raw.ending) ? raw.ending : "";
     state.name = text(raw.name, 30);
     state.flags = Array.isArray(raw.flags)
@@ -132,7 +138,7 @@
         ]
       : [];
     state.clues = Array.isArray(raw.clues)
-      ? raw.clues.map(cleanEntry).filter(Boolean).slice(0, 100)
+      ? raw.clues.map(cleanEntry).filter(Boolean).slice(0, 200)
       : [];
     state.notes = Array.isArray(raw.notes)
       ? raw.notes
@@ -198,7 +204,7 @@
       if (previous) {
         const { starred, note } = previous;
         Object.assign(previous, clean, { starred, note });
-      } else if (state.clues.length < 100) state.clues.push(clean);
+      } else if (state.clues.length < 200) state.clues.push(clean);
     });
   }
   function mark(flag) {
@@ -248,6 +254,25 @@
         state.ending = "left";
     });
   }
+  function inspectFound(id) {
+    return update((state) => {
+      if (!state.introduced || state.ending || !["key", "packet", "sleeve"].includes(id)) return;
+      if (!state.belongings.inspected.includes(id)) state.belongings.inspected.push(id);
+    });
+  }
+  function returnFound(id, expectedRun) {
+    let outcome = "blocked";
+    const state = update((s) => {
+      if (!s.introduced || s.ending || s.runToken !== expectedRun ||
+        s.clues.some((c) => c.id.startsWith("whisper-truth"))) return;
+      if (s.belongings.returned) { outcome = "already"; return; }
+      if (!s.belongings.inspected.includes(id) ||
+        !s.clues.some((c) => c.id === "xiaolu-arrival-lost-2")) return;
+      outcome = id === "packet" ? "returned" : "wrong";
+      if (outcome === "returned") s.belongings.returned = true;
+    });
+    return { outcome, state };
+  }
   function reset() {
     memory = empty();
     memory.runToken =
@@ -272,6 +297,8 @@
     star,
     addNote,
     finish,
+    inspectFound,
+    returnFound,
     reset,
     normalize,
   });
