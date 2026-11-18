@@ -19,11 +19,13 @@
     danny: ["这个名字很久没出现了。", "他以前也回来问过我。", "他的网页还在。"],
     returned: ["你回来了。", "他在网页里写了很多事吗？", "我看不到那边，你查完再回来。"],
     photo: ["你在看他留下的照片？", "我记得那天有人开过门。", "后来这里又安静了。"],
+   unresolved: ["他留下过这句话。", "我听到了。", "告诉他，我还在这里。"],
   };
   const visitorScripts = {
     identity: ["是我，小鹿。你还记得。", "那边的网页没有我的权限。", "我只能在这里等。"],
     property: ["你的东西我还没查到。", "先看完那些旧记录吧。", "我没有走，你回来还能问我。"],
     trust: ["你在他那里看见什么了？", "有些事我不知道怎么说。", "你先别填姓名。"],
+      unresolved: ["他留下过这句话。", "我听到了。", "告诉他，我还在这里。"],
   };
   function next(query, state, { itemMatch = false } = {}) {
     const q = fold(query);
@@ -52,6 +54,7 @@
       else if (/关了|关闭|再见|不找了|我要走|别关/.test(q)) context = "leave";
       else if (/骗|相信|真的吗|为什么帮/.test(q)) context = "trust";
       else if (/danny|上一个|那个人/.test(q)) context = "danny";
+      else if (/未解决|告诉她|我在找她|小鹿是谁/.test(q)) context = "unresolved";
       else if (has("trace") && /照片|相片|背面|开门/.test(q)) context = "photo";
       else if (has("trace") && /旧网页|个人网页|我回来了|他的网页/.test(q)) context = "returned";
       else if (/旧馆|harrow|哈罗/.test(q)) context = "place";

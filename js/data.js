@@ -281,7 +281,7 @@
       },
       "unresolved-7": {
         id: "unresolved-7",
-        title: "未解决 #7：小鹿是谁？",
+        title: "小鹿是谁？",
         kind: "record",
         source: "Danny 的个人网页 / 未解决问题",
         summary: "我在寻回网的搜索建议里看到过一句话：“我是小鹿。”",
