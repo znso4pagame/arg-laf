@@ -4,7 +4,24 @@
   else root.ZHAOHUI = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   return {
+    foundItems: [
+      { id: "key", title: "黄铜小钥匙", summary: "从旧馆站出口的排水槽旁拾到。", details: "钥匙齿缺了一角，钥匙环上系着蓝色棉线。金属不透光，没有包纸。", reply: "我的那件没有齿，也不开门。" },
+      { id: "packet", title: "折起的旧纸包", summary: "从旧馆站长椅下拾到，里面有颗硬物。", details: "展开后是一颗透明的蓝玻璃珠。包纸右下角焦黑，背面只有半枚旧馆戳，没有姓名。", reply: "是这颗。这张对钟便笺给你。" },
+      { id: "sleeve", title: "褪色的蓝卡套", summary: "从旧馆站问询处台阶拾到。", details: "磨砂卡套能透光，内夹一张空白衬纸。边缘完整，没有烧焦痕迹，挂绳已经断了。", reply: "不是卡套。包着它的纸有烧痕。" },
+    ],
     files: {
+      "found-receipt": {
+        id: "found-return-receipt", kind: "record", title: "拾获物交还回执 / 小鹿留下的旧地址",
+        source: "随身拾获物 · 旧纸包", summary: "旧纸包与蓝玻璃珠交还给小鹿；她在查询建议里给出一条旧地址。",
+        body: ["核对失物后，小鹿在查询建议中给出一个旧页面地址：Danny / 来访便笺。", "这次交还的是拾获物，没有填写人员认领申请。"],
+        url: "danny.html#journal--return-note",
+      },
+      "return-note": {
+        id: "return-note", kind: "record", title: "来访便笺 / 对钟后再合并",
+        source: "Danny 的个人网页 / 小鹿提供的索引", summary: "从小鹿提供的旧地址找到的便笺，未编入公开导航。",
+        body: ["留给后来查这件事的人：旧站缓存记的是本机时间，门房签领簿记的是馆钟。两边没有同步，不能按字面时间直接合并。", "我把偏差抄在本机缓存索引里了。进入工作匣后，先读签领簿和索引，再修那份会话包。", "—— Danny，11 月 3 日"],
+        url: "danny.html#journal--return-note", tab: "journal", access: "guest", date: "2019-11-03",
+      },
       anomaly: {
         id: "anomaly",
         kind: "page",

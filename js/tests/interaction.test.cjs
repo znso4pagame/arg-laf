@@ -23,6 +23,8 @@ function boot(
   local = memory(),
   session = memory(),
   hash = "",
+  navigationState = null,
+  motionOptions = null,
 ) {
   const html = fs.readFileSync(path.join(root, "html", page + ".html"), "utf8");
   const dom = new JSDOM(html, {
@@ -33,6 +35,8 @@ function boot(
     d = w.document,
     errors = [],
     timers = [];
+  if (navigationState)
+    w.history.replaceState(navigationState, "", w.location.href);
   Object.defineProperty(w, "localStorage", { value: local });
   Object.defineProperty(w, "sessionStorage", { value: session });
   w.setTimeout = (fn) => {
@@ -40,7 +44,60 @@ function boot(
     return timers.length;
   };
   w.clearTimeout = () => {};
-  w.matchMedia = () => ({ matches: false });
+  const media = {
+    matches: !!motionOptions?.systemReduced,
+    listeners: [],
+    addEventListener(type, fn) {
+      if (type === "change") this.listeners.push(fn);
+    },
+    change(value) {
+      this.matches = value;
+      this.listeners.forEach((fn) => fn({ matches: value }));
+    },
+  };
+  w.matchMedia = () => media;
+  const effects = [];
+  if (motionOptions?.animate) {
+    w.HTMLElement.prototype.animate = function (frames, options) {
+      if (motionOptions.fail) throw new Error("Animation unavailable");
+      let resolve, reject;
+      const finished = new Promise((a, b) => {
+        resolve = a;
+        reject = b;
+      });
+      const effect = {
+        element: this,
+        frames,
+        options,
+        finished,
+        cancelled: false,
+        complete: false,
+        cancel() {
+          this.cancelled = true;
+          reject(new Error("cancelled"));
+        },
+        finish() {
+          this.complete = true;
+          resolve();
+        },
+      };
+      effects.push(effect);
+      return effect;
+    };
+  }
+  if (motionOptions?.geometry) {
+    const original = w.HTMLElement.prototype.getBoundingClientRect;
+    w.HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.matches("[data-event]"))
+        return new w.DOMRect(
+          0,
+          [...this.parentElement.children].indexOf(this) * 50,
+          300,
+          44,
+        );
+      return original.call(this);
+    };
+  }
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.HTMLDialogElement.prototype.showModal = function () {
     this.open = true;
@@ -77,6 +134,8 @@ function boot(
   return {
     w,
     d,
+    effects,
+    media,
     $,
     click,
     set,
@@ -263,7 +322,7 @@ test("相机、证件套与票根各自保留同源入口，普通登记可保�
     a.click("#close-modal");
   }
   a.click("[data-nav=mine]");
-  assert.equal(a.d.querySelectorAll(".notebook-card").length, 3);
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith("public-")).length, 3);
   assert.ok(!a.state().clues.some((x) => x.id === "anomaly"));
 });
 test("游客可乱序阅读多个主题，但搜索与直访都不泄漏员工材料", (t) => {
@@ -565,7 +624,7 @@ test("本机登记也可按描述检索和保存，来源不会伪装成公开�
   a.click("#close-modal");
   a.click("[data-nav=mine]");
   assert.match(a.$("#results").textContent, /绿色水杯/);
-  assert.match(a.state().clues[0].source, /本机/);
+  assert.match(a.state().clues.find((c) => c.title.includes("绿色水杯")).source, /本机/);
 });
 
 test("时间校订要排除旧日期并统一钟表，游客及未校订的员工搜不到会话正文", (t) => {
@@ -875,4 +934,1095 @@ test("当前目标的站内跳转立即生效，材料副本可以直接回到�
   assert.equal(a.$("#modal").open, false);
   assert.equal(a.$("#application-panel").hidden, false);
   assert.equal(a.w.location.hash, "#application");
+});
+
+test("两条调查线可各自直接进入工具，同一栏目内跳转保留正在填写的柜号", (t) => {
+  const a = login(t, memory(), memory());
+  a.set("[name=code]", "5013");
+  const original = a.$("#cabinet-form");
+  a.click(".journey-tasks a[data-guide-focus=cabinet]");
+  assert.equal(a.d.activeElement, a.$(".cabinet-box"));
+  assert.equal(a.$("#cabinet-form"), original);
+  assert.equal(a.$("[name=code]").value, "5013");
+  a.click(".journey-tasks a[data-guide-focus=timeline]");
+  assert.equal(a.d.activeElement, a.$(".timeline-tool"));
+  assert.equal(a.$("[name=code]").value, "5013");
+});
+test("恢复会话但尚未阅读时，继续入口直接打开正文而非重新排序", (t) => {
+  const local = memory(),
+    session = memory();
+  login(t, local, session);
+  makeStore(local).mark("timeline");
+  const a = boot(t, "danny", local, session, "#work");
+  assert.equal(
+    a.$(".journey-actions>a").getAttribute("href"),
+    "danny.html#work--conversation",
+  );
+  a.click(".journey-actions>a");
+  assert.match(a.$("#reading-pane").textContent, /修复的查询会话/);
+  assert.equal(a.$(".journey-tasks small").textContent, "已核对");
+  assert.equal(a.$(".journey-actions>a").dataset.guideFocus, "cabinet");
+});
+test("游客取得必要的公开材料后目标转向登录，无关登记不冒充来源进度", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.collect({
+    id: "public-0813",
+    title: "校园卡",
+    fields: [["地点", "大学路 · 站台"]],
+    url: "index.html#search",
+  });
+  const guide = require("../journey-guide.js");
+  assert.equal(guide.describe(store.read()).index, 0);
+  for (const key of ["trace", "roster", "it-note", "rain", "door-back"])
+    store.collect(data.files[key]);
+  const a = boot(t, "danny", local);
+  assert.equal(
+    a.$(".journey-actions>a").getAttribute("href"),
+    "danny.html#account",
+  );
+  a.click(".journey-actions>a");
+  assert.ok(a.$("#login-form"));
+  assert.equal(a.d.activeElement, a.$("#login-form"));
+  assert.ok(!a.state().flags.includes("staff"));
+});
+test("完成核验的玩家在游客会话下仍能回主站决定，不被要求重复登录", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.mark("verified");
+  const a = boot(t, "danny", local, memory(), "#work");
+  assert.equal(
+    a.$(".journey-actions>a").getAttribute("href"),
+    "index.html#application",
+  );
+  assert.match(a.$("#journey-guide").textContent, /作最后决定/);
+  assert.equal(a.$("[data-read=night]"), null);
+});
+test("从私有材料深链接进入，游客登录后返回请求的原文", (t) => {
+  const local = memory(),
+    session = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.plan);
+  const a = boot(t, "danny", local, session, "#work--plan");
+  assert.equal(a.$("#reading-pane"), null);
+  a.click(".journey-actions>a");
+  a.set("[name=account]", "danny.late");
+  a.set("[name=password]", "west1103");
+  a.submit("#login-form");
+  assert.equal(a.w.location.hash, "#work--plan");
+  assert.equal(a.$("#reading-pane").hidden, false);
+  assert.match(a.$("#reading-pane").textContent, /3 号厅楼层图/);
+});
+test("目标说明阅读时自动收紧，手动展开与查阅脉络在换材料后保留", (t) => {
+  const a = boot(t, "danny");
+  a.click("[data-read=rain]");
+  assert.ok(a.$("#journey-guide").classList.contains("is-compact"));
+  a.click("[data-guide-toggle]");
+  assert.ok(!a.$("#journey-guide").classList.contains("is-compact"));
+  assert.equal(
+    a.$("[data-guide-toggle]").getAttribute("aria-expanded"),
+    "true",
+  );
+  a.$(".journey-path").open = true;
+  a.click("[data-read=tea]");
+  assert.ok(!a.$("#journey-guide").classList.contains("is-compact"));
+  assert.equal(a.$(".journey-path").open, true);
+});
+test("其他窗口保存笔记不清空登录输入，口令不进入存档", (t) => {
+  const local = memory(),
+    a = boot(t, "danny", local, memory(), "#account");
+  a.set("[name=account]", "danny.late");
+  a.set("[name=password]", "正在输入的口令");
+  const form = a.$("#login-form");
+  makeStore(local).addNote("其他窗口", "新备注");
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#login-form"), form);
+  assert.equal(a.$("[name=password]").value, "正在输入的口令");
+  assert.ok(!JSON.stringify([...local.map]).includes("正在输入的口令"));
+});
+test("跨窗口进度刷新保留未提交姓名，清空输入和重新开始均清除草稿", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.mark("verified");
+  const a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.set("#claim-form [name=name]", "尚未提交的名字");
+  store.addNote("其他窗口", "新材料");
+  a.w.dispatchEvent(new a.w.StorageEvent("storage", { key: store.key }));
+  assert.equal(a.$("#claim-form [name=name]").value, "尚未提交的名字");
+  assert.equal(a.state().name, "");
+  a.set("#claim-form [name=name]", "");
+  a.w.dispatchEvent(new a.w.StorageEvent("storage", { key: store.key }));
+  assert.equal(a.$("#claim-form [name=name]").value, "");
+  a.set("#claim-form [name=name]", "应当被清除");
+  a.click("#reset");
+  a.click("#confirm-reset");
+  assert.equal(a.$("#claim-form [name=name]").value, "");
+});
+
+test("跨窗口重新开始仍会立即撤回当前私有阅读权限", (t) => {
+  const local = memory(),
+    session = memory(),
+    a = login(t, local, session);
+  a.click("[data-read=night]");
+  assert.ok(a.$("#reading-pane"));
+  makeStore(local).reset();
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#reading-pane"), null);
+  assert.equal(a.$("[data-read=night]"), null);
+  assert.equal(session.getItem("harrow-session"), null);
+  assert.match(a.$("#site-main").textContent, /本轮调查尚未开始/);
+});
+
+test("从主站打开继续入口会定位到 Danny 的指定工具而不只是栏目顶部", (t) => {
+  const local = memory(),
+    session = memory();
+  login(t, local, session);
+  const main = boot(t, "index", local, session);
+  const href = main
+    .$(".journey-tasks a[data-guide-focus=cabinet]")
+    .getAttribute("href");
+  assert.equal(href, "danny.html#work--tool-cabinet");
+  const site = boot(t, "danny", local, session, href.slice(href.indexOf("#")));
+  assert.equal(site.d.activeElement, site.$(".cabinet-box"));
+  assert.ok(!site.state().flags.includes("cabinet"));
+});
+test("材料深链接与工具深链接在登录恢复后都定位到请求的位置", (t) => {
+  const local = memory(),
+    session = memory();
+  makeStore(local).mark("staff");
+  const a = boot(t, "danny", local, session, "#work--tool-timeline");
+  a.click(".journey-actions>a");
+  a.set("[name=account]", "danny.late");
+  a.set("[name=password]", "west1103");
+  a.submit("#login-form");
+  assert.equal(a.w.location.hash, "#work--tool-timeline");
+  assert.equal(a.d.activeElement, a.$(".timeline-tool"));
+  const b = boot(t, "danny", local, session, "#work--plan");
+  assert.equal(b.d.activeElement, b.$("#reading-pane"));
+});
+
+function traverse(a, direction) {
+  a.w.history[direction]();
+  for (let i = 0; i < 4; i++) a.tick();
+}
+test("History API 后退与前进恢复各次查询和我的视图，不制造新查询", (t) => {
+  const a = boot(t);
+  a.click("#intro-skip");
+  a.search("钱包");
+  a.search("耳机");
+  a.click("[data-nav=mine]");
+  assert.equal(a.w.location.hash, "#mine");
+  traverse(a, "back");
+  assert.ok(!a.d.body.classList.contains("notebook-mode"));
+  assert.equal(a.$("#search").value, "耳机");
+  traverse(a, "back");
+  assert.equal(a.$("#search").value, "钱包");
+  assert.ok(a.$('[data-item="0816"]'));
+  traverse(a, "forward");
+  assert.equal(a.$("#search").value, "耳机");
+  assert.deepEqual(Array.from(a.state().searchHistory), ["钱包", "耳机"]);
+  traverse(a, "forward");
+  assert.ok(a.d.body.classList.contains("notebook-mode"));
+});
+test("菜单进入我的可刷新恢复，返回查阅后刷新不会再次跳回我的", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.search("相机");
+  a.click("[data-nav=mine]");
+  const b = boot(t, "index", local, memory(), a.w.location.hash);
+  assert.ok(b.d.body.classList.contains("notebook-mode"));
+  b.click("#notebook-return");
+  assert.equal(b.w.location.hash, "#search");
+  assert.equal(b.$("#search").value, "相机");
+  const c = boot(t, "index", local, memory(), b.w.location.hash);
+  assert.ok(!c.d.body.classList.contains("notebook-mode"));
+  assert.ok(c.$('[data-item="0810"]'));
+});
+test("首页与失物大厅地址和选中导航一致，后退不会恢复过期查询", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.search("钱包");
+  a.click("[data-nav=all]");
+  assert.equal(a.w.location.hash, "#all");
+  a.click("[data-nav=home]");
+  assert.equal(a.w.location.hash, "#home");
+  traverse(a, "back");
+  assert.ok(a.$("[data-nav=all]").classList.contains("active"));
+  assert.equal(a.$("#search").value, "");
+  traverse(a, "back");
+  assert.equal(a.$("#search").value, "钱包");
+  const b = boot(t, "index", local, memory(), "#home");
+  assert.equal(b.$("#search").value, "");
+  assert.equal(b.state().lastQuery, "");
+});
+test("Danny 同栏目工具前进后退只改变位置，不重建正在填写的柜号", (t) => {
+  const a = login(t, memory(), memory());
+  a.set("[name=code]", "未提交柜号");
+  const form = a.$("#cabinet-form");
+  a.click(".journey-tasks a[data-guide-focus=cabinet]");
+  a.click(".journey-tasks a[data-guide-focus=timeline]");
+  traverse(a, "back");
+  assert.equal(a.d.activeElement, a.$(".cabinet-box"));
+  assert.equal(a.$("#cabinet-form"), form);
+  assert.equal(a.$("[name=code]").value, "未提交柜号");
+  traverse(a, "forward");
+  assert.equal(a.d.activeElement, a.$(".timeline-tool"));
+  assert.equal(a.$("[name=code]").value, "未提交柜号");
+});
+test("材料前后查阅保留同栏目工具草稿，收起后回到目录", (t) => {
+  const a = login(t, memory(), memory());
+  a.set("[name=code]", "正在核对");
+  const form = a.$("#cabinet-form");
+  a.click("[data-read=night]");
+  a.click("[data-read=draft]");
+  traverse(a, "back");
+  assert.match(a.$("#reading-pane h2").textContent, /夜班日志/);
+  assert.equal(a.$("#cabinet-form"), form);
+  assert.equal(a.$("[name=code]").value, "正在核对");
+  traverse(a, "forward");
+  assert.match(a.$("#reading-pane h2").textContent, /草稿/);
+  a.click("#close-reading");
+  assert.equal(a.w.location.hash, "#work");
+  assert.equal(a.$("#reading-pane").hidden, true);
+});
+test("工作匣和旧柜间切换保留工具草稿，退出员工模式会清除它们", (t) => {
+  const local = memory(),
+    session = memory(),
+    a = cabinet(t, local, session);
+  a.set("[name=signer]", "待核对的代号");
+  a.set("[name=subject]", "另一个代号");
+  a.click("[data-tab=work]");
+  a.set("[name=code]", "柜号草稿");
+  a.click("[data-tab=archive]");
+  assert.equal(a.$("[name=signer]").value, "待核对的代号");
+  assert.equal(a.$("[name=subject]").value, "另一个代号");
+  a.click("[data-tab=work]");
+  assert.equal(a.$("[name=code]").value, "柜号草稿");
+  a.click("#logout");
+  a.click("[data-tab=account]");
+  a.set("[name=account]", "danny.late");
+  a.set("[name=password]", "west1103");
+  a.submit("#login-form");
+  assert.equal(a.$("[name=code]").value, "");
+  a.click("[data-tab=archive]");
+  assert.equal(a.$("[name=signer]").value, "");
+});
+test("其他窗口更新不擅自提交正在编辑的主站搜索词或丢失我的筛选草稿", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.search("钱包");
+  a.set("#search", "还未提交的耳机");
+  makeStore(local).addNote("其他窗口", "更新");
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#search").value, "还未提交的耳机");
+  assert.ok(a.$('[data-item="0816"]'));
+  assert.equal(a.state().lastQuery, "钱包");
+  a.click("[data-nav=mine]");
+  a.set("#notebook-search", "未提交筛选");
+  a.$("#notebook-search").focus();
+  a.$("#notebook-search").setSelectionRange(2, 4);
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#notebook-search").value, "未提交筛选");
+  assert.equal(a.d.activeElement, a.$("#notebook-search"));
+  assert.equal(a.$("#notebook-search").selectionStart, 2);
+  assert.equal(a.$("#notebook-search").selectionEnd, 4);
+  a.click("#notebook-return");
+  assert.equal(a.$("#search").value, "钱包");
+});
+
+test("主站注销可取消，确认后清除本轮全部记录并回到初始引导", (t) => {
+  const local = memory(),
+    session = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.mark("verified");
+  store.collect(data.files.truth);
+  store.addNote("要删除的笔记", "内容");
+  store.update((s) => {
+    s.goal = "旧失物";
+    s.name = "旧名字";
+    s.ending = "claimed";
+    s.registrations.push({ id: "local-x", name: "本机物品", place: "某处" });
+    s.settings.assist = true;
+    s.introduced = true;
+  });
+  session.setItem("harrow-session", "danny-private-v3");
+  local.setItem("unrelated-site", "keep");
+  local.setItem("zhaohui-story-v1", "old-save");
+  const a = boot(t, "index", local, session);
+  a.click("[data-reset-game]");
+  assert.ok(a.$("#modal").open);
+  a.click("#cancel-choice");
+  assert.equal(a.state().ending, "claimed");
+  a.click("[data-reset-game]");
+  a.click("#confirm-reset");
+  const reset = a.state();
+  assert.equal(reset.ending, "");
+  assert.equal(reset.goal, "");
+  assert.equal(reset.name, "");
+  assert.equal(reset.clues.length, 0);
+  assert.equal(reset.notes.length, 0);
+  assert.equal(reset.registrations.length, 0);
+  assert.equal(reset.flags.length, 0);
+  assert.equal(reset.searchHistory.length, 0);
+  assert.equal(reset.settings.assist, false);
+  assert.equal(session.getItem("harrow-session"), null);
+  assert.equal(local.getItem("unrelated-site"), "keep");
+  assert.equal(local.getItem("zhaohui-story-v1"), "old-save");
+  assert.ok(a.$("#intro").open);
+  assert.equal(a.w.location.hash, "#home");
+  assert.equal(a.$("#intro-item").value, "钱包");
+  a.submit("#intro-form");
+  assert.equal(a.state().goal, "钱包");
+  assert.ok(a.state().introduced);
+});
+test("Danny 注销取消不丢进度，确认后退出会话并提供回到开场的原生链接", (t) => {
+  const local = memory(),
+    session = memory(),
+    a = login(t, local, session);
+  a.click("[data-read=night]");
+  a.click("#restart-game");
+  a.click("#keep-playing");
+  assert.ok(a.state().flags.includes("staff"));
+  a.click("#restart-game");
+  a.d.addEventListener("click", (e) => {
+    if (e.target.closest("#confirm-restart")) e.preventDefault();
+  });
+  a.click("#confirm-restart");
+  assert.equal(a.$("#confirm-restart").getAttribute("href"), "index.html#home");
+  assert.equal(a.state().clues.length, 0);
+  assert.equal(a.state().flags.length, 0);
+  assert.equal(session.getItem("harrow-session"), null);
+  assert.equal(a.$("#restart-dialog").open, false);
+  assert.match(a.$("#site-main").textContent, /本轮调查尚未开始/);
+  const main = boot(t, "index", local, session, "#home");
+  assert.ok(main.$("#intro").open);
+  assert.equal(main.state().goal, "");
+});
+test("注销后后退到旧查询不会恢复旧目标或旧笔记", (t) => {
+  const a = boot(t);
+  a.click("#intro-skip");
+  a.search("钱包");
+  a.search("耳机");
+  a.click("[data-nav=mine]");
+  a.click("[data-reset-game]");
+  a.click("#confirm-reset");
+  const token = a.state().runToken;
+  traverse(a, "back");
+  assert.equal(a.w.location.hash, "#home");
+  assert.equal(a.state().runToken, token);
+  assert.equal(a.state().goal, "");
+  assert.equal(a.state().clues.length, 0);
+  assert.ok(a.$("#intro").open);
+  assert.ok(!a.d.body.classList.contains("notebook-mode"));
+});
+test("注销后的旧材料深链接不会自动收集来源，开场完成后才恢复正常游客浏览", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.collect(data.files.plan);
+  store.reset();
+  const a = boot(t, "danny", local, memory(), "#work--plan");
+  assert.equal(a.state().clues.length, 0);
+  a.click("[data-tab=journal]");
+  assert.equal(a.state().clues.length, 0);
+  assert.equal(a.$("[data-read=rain]"), null);
+  const main = boot(t, "index", local, memory(), "#home");
+  main.submit("#intro-form");
+  const b = boot(t, "danny", local, memory(), "#journal");
+  assert.ok(b.$("[data-read=rain]"));
+  assert.ok(b.state().clues.some((x) => x.id === "trace"));
+});
+function cachedPage(a) {
+  const e = new a.w.Event("pageshow");
+  Object.defineProperty(e, "persisted", { value: true });
+  a.w.dispatchEvent(e);
+}
+test("缓存页面在注销后恢复时也回到开场状态，不复活私有正文", (t) => {
+  const local = memory(),
+    session = memory(),
+    site = login(t, local, session);
+  site.click("[data-read=night]");
+  const main = boot(t, "index", local, session);
+  main.click("#intro-skip");
+  main.search("旧馆");
+  makeStore(local).reset();
+  session.removeItem("harrow-session");
+  cachedPage(site);
+  assert.equal(site.$("#reading-pane"), null);
+  assert.match(site.$("#site-main").textContent, /本轮调查尚未开始/);
+  cachedPage(main);
+  assert.ok(main.$("#intro").open);
+  assert.equal(main.$("#search").value, "");
+  assert.equal(main.state().clues.length, 0);
+});
+test("其他窗口注销时，仍处于游客阅读的窗口也会清理旧正文和搜索内容", (t) => {
+  const local = memory(),
+    a = boot(t, "danny", local);
+  a.click("[data-read=rain]");
+  a.set("#site-search", "旧搜索");
+  makeStore(local).reset();
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#reading-pane"), null);
+  assert.equal(a.$("#site-search").value, "");
+  assert.equal(a.state().clues.length, 0);
+  assert.match(a.$("#site-main").textContent, /本轮调查尚未开始/);
+});
+test("刷新优先恢复本标签页的查询快照，不被另一个标签页的最后搜索覆盖", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.search("钱包");
+  const snapshot = JSON.parse(JSON.stringify(a.w.history.state));
+  const other = boot(t, "index", local);
+  other.search("耳机");
+  const reloaded = boot(t, "index", local, memory(), "#search", snapshot);
+  assert.equal(reloaded.$("#search").value, "钱包");
+  assert.ok(reloaded.$('[data-item="0816"]'));
+});
+test("有重复关键词的历史记录按原次序恢复，不错误跳到第一次同名查询", (t) => {
+  const a = boot(t);
+  a.click("#intro-skip");
+  for (const q of ["钱包", "耳机", "钱包", "相机"]) a.search(q);
+  traverse(a, "back");
+  assert.equal(a.$("#search").value, "钱包");
+  assert.equal(a.state().searchCursor, 2);
+  a.click("#query-back");
+  assert.equal(a.$("#search").value, "耳机");
+});
+test("注销会清除打开的提示与临时通知，开场输入不会沿用上轮内容", (t) => {
+  const a = boot(t);
+  a.set("#intro-item", "旧物");
+  a.submit("#intro-form");
+  a.click("#hint-toggle");
+  a.search("钱包");
+  a.click('[data-item="0816"]');
+  a.click('[data-save-record="0816"]');
+  a.click("#close-modal");
+  assert.equal(a.$("#toast").hidden, false);
+  a.click("[data-reset-game]");
+  a.click("#confirm-reset");
+  assert.equal(a.$("#hint-content").hidden, true);
+  assert.equal(a.$("#hint-body").textContent, "");
+  assert.equal(a.$("#toast").hidden, true);
+  assert.equal(a.$("#intro-item").value, "钱包");
+});
+
+test("旧标签页的员工会话不会因新一轮在别处登录而重新生效", (t) => {
+  const local = memory(),
+    oldSession = memory();
+  login(t, local, oldSession);
+  const store = makeStore(local);
+  store.reset();
+  const main = boot(t, "index", local, memory(), "#home");
+  main.submit("#intro-form");
+  const newSession = memory();
+  login(t, local, newSession);
+  assert.notEqual(
+    oldSession.getItem("harrow-run-token"),
+    newSession.getItem("harrow-run-token"),
+  );
+  const stale = boot(t, "danny", local, oldSession, "#work");
+  assert.equal(stale.$("[data-read=night]"), null);
+  assert.match(stale.$("#permission-label").textContent, /游客/);
+});
+
+test("另一窗口已经放弃时，旧签署确认不会显示虚假的岗位移交", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.clause);
+  store.update((s) => (s.introduced = true));
+  const a = boot(t, "index", local),
+    b = boot(t, "index", local);
+  a.set("#claim-form [name=name]", "窗口甲");
+  a.submit("#claim-form");
+  b.click("#leave");
+  b.click("#confirm-choice");
+  a.click("#confirm-choice");
+  assert.equal(a.state().ending, "left");
+  assert.equal(a.$("#ending").open, false);
+  assert.match(a.$("#staff-count").textContent, /0/);
+  assert.equal(a.$("#application-panel").hidden, true);
+});
+test("两份签署确认按已经保存的姓名展示，迟到的确认不改写结局", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.clause);
+  store.update((s) => (s.introduced = true));
+  const a = boot(t, "index", local),
+    b = boot(t, "index", local);
+  a.set("#claim-form [name=name]", "窗口甲");
+  a.submit("#claim-form");
+  b.set("#claim-form [name=name]", "窗口乙");
+  b.submit("#claim-form");
+  b.click("#confirm-choice");
+  a.click("#confirm-choice");
+  assert.equal(a.state().name, "窗口乙");
+  assert.match(a.$("#ending-name").textContent, /窗口乙/);
+  assert.doesNotMatch(a.$("#ending-name").textContent, /窗口甲/);
+  assert.match(a.$("#toast").textContent, /已有结局/);
+});
+test("结束事件关闭其他窗口的旧确认，缓存恢复同一轮也同步实际终局", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.collect(data.files.clause);
+  store.update((s) => (s.introduced = true));
+  const a = boot(t, "index", local),
+    b = boot(t, "index", local);
+  a.click("#leave");
+  b.set("#claim-form [name=name]", "旧确认");
+  b.submit("#claim-form");
+  store.finish("left");
+  a.w.dispatchEvent(new a.w.StorageEvent("storage", { key: store.key }));
+  assert.equal(a.$("#modal").open, false);
+  assert.equal(a.$("#application-panel").hidden, true);
+  cachedPage(b);
+  assert.equal(b.$("#modal").open, false);
+  assert.equal(b.$("#application-panel").hidden, true);
+  assert.match(b.$("#staff-count").textContent, /0/);
+  assert.equal(b.state().ending, "left");
+});
+test("注销后完成开场会解开其他游客窗口的重开提示，无须再次刷新或换栏目", (t) => {
+  const local = memory(),
+    store = makeStore(local);
+  store.reset();
+  const site = boot(t, "danny", local, memory(), "#journal");
+  assert.match(site.$("#site-main").textContent, /尚未开始/);
+  const main = boot(t, "index", local, memory(), "#home");
+  main.submit("#intro-form");
+  site.w.dispatchEvent(new site.w.StorageEvent("storage", { key: store.key }));
+  assert.ok(site.$("[data-read=rain]"));
+  assert.ok(site.state().clues.some((x) => x.id === "trace"));
+  assert.match(site.$("#journey-guide").textContent, /确认 Danny 的访问身份/);
+});
+test("空格登记不会生成空白物品，错误字段保留在表单中并可继续修正", (t) => {
+  const a = boot(t);
+  a.click("#intro-skip");
+  a.click("[data-nav=register]");
+  a.set("#register-form [name=name]", "  ");
+  a.set("#register-form [name=place]", "\u3000");
+  a.set("#register-form [name=description]", "正常描述");
+  a.submit("#register-form");
+  assert.equal(a.state().registrations.length, 0);
+  assert.ok(a.$("#modal").open);
+  assert.equal(a.$("#register-error").hidden, false);
+  assert.equal(a.d.activeElement, a.$("#register-form [name=name]"));
+  a.set("#register-form [name=name]", "  手电  ");
+  a.set("#register-form [name=place]", "门房");
+  assert.equal(a.$("#register-error").hidden, true);
+  a.submit("#register-form");
+  assert.equal(a.state().registrations.length, 1);
+  assert.equal(a.state().registrations[0].name, "手电");
+  assert.equal(a.$("#modal").open, false);
+});
+test("另一窗口关闭线索辅助后，当前开关与提示立即同步且不提交搜索", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local);
+  a.click("#intro-skip");
+  a.set("#search", "钱包");
+  a.click("#match-toggle");
+  assert.equal(a.$("#clue-match").hidden, false);
+  makeStore(local).update((s) => (s.settings.assist = false));
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.$("#match-toggle").getAttribute("aria-pressed"), "false");
+  assert.equal(a.$("#clue-match").hidden, true);
+  assert.equal(a.state().lastQuery, "");
+});
+test("旧轮次的确认不能结束新一轮，即使新一轮已经重新取得员工身份", () => {
+  const store = makeStore(memory());
+  store.mark("staff");
+  const previous = store.read().runToken;
+  store.reset();
+  store.mark("staff");
+  store.finish("claimed", "旧确认", previous);
+  assert.equal(store.read().ending, "");
+  store.finish("left", "", store.read().runToken);
+  assert.equal(store.read().ending, "left");
+});
+test("注销后可完整重玩：开场、登录、两条调查线、核验与另一个结局", (t) => {
+  const local = memory(),
+    session = memory(),
+    store = makeStore(local);
+  store.mark("staff");
+  store.finish("claimed", "上一轮");
+  store.addNote("上一轮笔记", "不应留下");
+  const main = boot(t, "index", local, session);
+  main.click("[data-reset-game]");
+  main.click("#confirm-reset");
+  const token = main.state().runToken;
+  assert.equal(main.state().clues.length, 0);
+  assert.equal(main.state().notes.length, 0);
+  main.submit("#intro-form");
+  const site = cabinet(t, local, session);
+  assert.equal(session.getItem("harrow-run-token"), token);
+  compare(site);
+  for (const key of ["signed", "relist", "clause"])
+    site.click("[data-read=" + key + "]");
+  repair(site);
+  chain(site);
+  assert.ok(site.state().flags.includes("verified"));
+  const final = boot(t, "index", local, session, "#application");
+  assert.equal(final.$("#application-panel").hidden, false);
+  final.click("#leave");
+  final.click("#confirm-choice");
+  assert.equal(final.state().ending, "left");
+  assert.equal(final.state().runToken, token);
+  assert.equal(final.state().notes.length, 0);
+  assert.match(final.$("#staff-count").textContent, /0/);
+});
+
+test("快速切换查询会取消旧动效，内容和输入在动画未完成时已经可用", (t) => {
+  const a = boot(t, "index", memory(), memory(), "", null, { animate: true });
+  a.click("#intro-skip");
+  a.search("钱包");
+  const previous = a.effects.findLast((x) =>
+    x.element.matches('[data-item="0816"]'),
+  );
+  assert.ok(previous);
+  assert.equal(previous.complete, false);
+  a.search("耳机");
+  assert.equal(previous.cancelled, true);
+  assert.ok(a.$('[data-item="0814"]'));
+  assert.equal(a.state().lastQuery, "耳机");
+  assert.equal(a.$("#search").disabled, false);
+  assert.ok(a.effects.findLast((x) => x.element.matches('[data-item="0814"]')));
+});
+test("材料展开与翻面不等待动效，连续操作会取消已移除内容的动画", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "", null, { animate: true });
+  a.click("[data-read=rain]");
+  const opening = a.effects.findLast((x) => x.element.id === "reading-pane");
+  a.click("[data-read=tea]");
+  assert.equal(opening.cancelled, true);
+  assert.ok(a.state().clues.some((x) => x.id === "rain"));
+  assert.ok(a.state().clues.some((x) => x.id === "tea"));
+  a.click("[data-tab=photos]");
+  a.click("[data-read=door-front]");
+  a.click("[data-read=door-back]");
+  const turning = a.effects.findLast((x) =>
+    x.element.classList.contains("image-viewport"),
+  );
+  assert.ok(
+    turning.frames.some((frame) => frame.transform?.includes("rotateY")),
+  );
+  assert.equal(turning.complete, false);
+  assert.ok(a.state().clues.some((x) => x.id === "door-back"));
+  assert.match(a.$("#reading-pane h2").textContent, /背面/);
+});
+test("手动和系统减少动态效果都会取消进行中的动画，操作逻辑继续即时生效", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local, memory(), "", null, { animate: true });
+  a.click("#intro-skip");
+  a.search("钱包");
+  a.click("#motion-toggle");
+  assert.equal(a.w.document.documentElement.dataset.motion, "reduced");
+  assert.equal(a.$("#motion-toggle").getAttribute("aria-pressed"), "true");
+  assert.ok(a.effects.every((x) => x.cancelled));
+  const count = a.effects.length;
+  a.search("雨伞");
+  assert.equal(a.effects.length, count);
+  assert.ok(a.$('[data-item="0812"]'));
+  a.click("#motion-toggle");
+  a.search("相机");
+  assert.ok(a.effects.length > count);
+  a.media.change(true);
+  assert.equal(a.w.document.documentElement.dataset.motion, "reduced");
+  assert.ok(a.effects.every((x) => x.cancelled));
+  const paused = a.effects.length;
+  a.search("钥匙");
+  assert.equal(a.effects.length, paused);
+  a.media.change(false);
+  assert.equal(a.w.document.documentElement.dataset.motion, "full");
+});
+test("动画 API 缺失或报错均不阻断调查，保存内容不依赖动画完成回调", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#photos", null, {
+    animate: true,
+    fail: true,
+  });
+  a.click("[data-read=door-front]");
+  a.click("[data-read=door-back]");
+  assert.equal(a.effects.length, 0);
+  assert.ok(a.state().clues.some((x) => x.id === "door-back"));
+  assert.match(a.$("#reading-pane h2").textContent, /背面/);
+  const b = boot(t);
+  b.click("#intro-skip");
+  b.search("钱包");
+  assert.ok(b.$('[data-item="0816"]'));
+});
+test("记录重排立即改变顺序并保留键盘焦点，动画只描绘位置变化", (t) => {
+  const local = memory(),
+    session = memory();
+  login(t, local, session);
+  const a = boot(t, "danny", local, session, "#work", null, {
+    animate: true,
+    geometry: true,
+  });
+  const before = a.state().danny.timeline.indexOf("keys");
+  a.click('[data-move=keys][data-direction="-1"]');
+  assert.equal(a.state().danny.timeline.indexOf("keys"), before - 1);
+  assert.equal(a.d.activeElement.dataset.move, "keys");
+  assert.ok(
+    a.effects.some(
+      (x) =>
+        x.element.hasAttribute("data-event") &&
+        x.frames.some((frame) => frame.transform?.includes("50px")),
+    ),
+  );
+  assert.ok(!a.state().flags.includes("timeline"));
+});
+test("对照时仅更新换过的纸张，另一份材料的阅读位置不会被动画重置", (t) => {
+  const a = cabinet(t, memory(), memory());
+  choose(a, "left", "municipalA");
+  const content = a.$("#compare-doc-left").firstElementChild;
+  a.$("#compare-doc-left").scrollTop = 80;
+  choose(a, "right", "municipalB");
+  assert.equal(a.$("#compare-doc-left").firstElementChild, content);
+  assert.equal(a.$("#compare-doc-left").scrollTop, 80);
+});
+test("其他窗口的普通更新不会重播列表入场，页面离开会清理仍在运行的动画", (t) => {
+  const local = memory(),
+    a = boot(t, "index", local, memory(), "", null, { animate: true });
+  a.click("#intro-skip");
+  a.search("钱包");
+  const count = a.effects.length;
+  makeStore(local).addNote("旁页", "更新");
+  a.w.dispatchEvent(
+    new a.w.StorageEvent("storage", { key: a.w.ZHAOHUI_JOURNEY.key }),
+  );
+  assert.equal(a.effects.length, count);
+  a.search("耳机");
+  a.w.dispatchEvent(new a.w.Event("pagehide"));
+  assert.ok(a.effects.every((x) => x.cancelled));
+});
+test("已经结束的动画会正常清理，后续取消不会再次操作它", async (t) => {
+  const a = boot(t, "danny", memory(), memory(), "", null, { animate: true });
+  a.click("[data-read=rain]");
+  const effect = a.effects.findLast((x) => x.element.id === "reading-pane");
+  effect.finish();
+  await Promise.resolve();
+  a.w.ZHAOHUI_MOTION.cancelAll();
+  assert.equal(effect.cancelled, false);
+  assert.equal(effect.complete, true);
+});
+
+test("扫描缩放可连续中断，键盘恢复与边界控件立即生效", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#photos", null, { animate: true });
+  a.click("[data-read=door-front]");
+  assert.equal(a.$('[data-zoom="-1"]').disabled, true);
+  const viewport = a.$(".image-viewport"), img = viewport.querySelector("img");
+  const key = (value, options = {}) => viewport.dispatchEvent(new a.w.KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true, ...options }));
+  viewport.focus();
+  key("+");
+  const first = a.effects.findLast((x) => x.element === img);
+  assert.equal(img.style.width, "150%");
+  assert.match(first.frames[0].transform, /scale/);
+  key("+");
+  assert.equal(first.cancelled, true);
+  assert.equal(img.style.width, "200%");
+  key("+", { ctrlKey: true });
+  assert.equal(img.style.width, "200%");
+  key("+"); key("+"); key("+");
+  assert.equal(img.style.width, "300%");
+  assert.equal(a.$('[data-zoom="1"]').disabled, true);
+  key("0");
+  assert.equal(img.style.width, "100%");
+  assert.equal(a.$('[data-zoom-fit]').disabled, true);
+  key("-");
+  assert.equal(img.style.width, "100%");
+  a.click('[data-zoom="1"]');
+  a.$('[data-zoom-fit]').focus();
+  a.click('[data-zoom-fit]');
+  assert.equal(a.d.activeElement, viewport);
+});
+test("缩放以当前阅读中心保持位置，减少动态时也立即更新尺寸", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#photos", null, { animate: true, systemReduced: true });
+  a.click("[data-read=door-front]");
+  const viewport = a.$(".image-viewport"), img = viewport.querySelector("img");
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 200 }, clientHeight: { value: 200 },
+    scrollWidth: { get: () => 200 * (Number(a.$('.image-viewer').dataset.scale) || 1) },
+    scrollHeight: { get: () => 200 * (Number(a.$('.image-viewer').dataset.scale) || 1) },
+  });
+  viewport.getBoundingClientRect = () => new a.w.DOMRect(0, 0, 200, 200);
+  img.getBoundingClientRect = () => {
+    const size = 200 * (Number(a.$('.image-viewer').dataset.scale) || 1);
+    return new a.w.DOMRect(-viewport.scrollLeft, -viewport.scrollTop, size, size);
+  };
+  a.click('[data-zoom="1"]');
+  assert.equal(viewport.scrollLeft, 50);
+  assert.equal(viewport.scrollTop, 50);
+  a.click('[data-zoom-fit]');
+  assert.equal(viewport.scrollLeft, 0);
+  assert.equal(viewport.scrollTop, 0);
+  assert.equal(a.effects.length, 0);
+});
+test("收起照片背面取消阅读动画并回到正面目录，关闭弹窗同样清理", (t) => {
+  const a = boot(t, "danny", memory(), memory(), "#photos", null, { animate: true });
+  a.click('[data-read=door-front]');
+  a.click('[data-read=door-back]');
+  a.click('[data-zoom="1"]');
+  const effects = a.effects.filter((x) => a.$('#reading-pane').contains(x.element));
+  a.click('#close-reading');
+  assert.equal(a.$('#reading-pane').hidden, true);
+  assert.ok(effects.every((x) => x.cancelled));
+  assert.equal(a.d.activeElement.dataset.read, 'door-front');
+  assert.equal(a.w.location.hash, '#photos');
+  const b = boot(t, 'index', memory(), memory(), '', null, { animate: true });
+  b.click('#intro-skip');
+  b.click('#reset');
+  const paper = b.effects.findLast((x) => x.element.id === 'modal-body');
+  b.click('#cancel-choice');
+  assert.equal(paper.cancelled, true);
+  assert.equal(b.$('#modal').open, false);
+});
+test("收藏筛选、重点和搜索重绘后仍保留键盘操作位置", (t) => {
+  const local = memory();
+  makeStore(local).collect(data.files.badge);
+  const a = boot(t, 'index', local, memory(), '', null, { animate: true });
+  a.click('#intro-skip');
+  a.click('[data-nav=mine]');
+  a.click('[data-filter=image]');
+  assert.equal(a.d.activeElement.dataset.filter, 'image');
+  a.click('[data-filter=all]');
+  a.click('[data-star=badge]');
+  assert.equal(a.d.activeElement.dataset.star, 'badge');
+  a.click('[data-filter=starred]');
+  a.click('[data-star=badge]');
+  assert.equal(a.$('[data-star=badge]'), null);
+  assert.equal(a.d.activeElement.dataset.filter, 'starred');
+  a.set('#notebook-search', '工牌');
+  a.submit('#notebook-search-form');
+  assert.equal(a.d.activeElement.id, 'notebook-search');
+  a.click('#clear-notebook-search');
+  assert.equal(a.d.activeElement.id, 'notebook-search');
+});
+
+test("小鹿从第一次普通失物查询就出现，每次一句并可点击原句续读", (t) => {
+  const a = boot(t);
+  a.click('#intro-skip');
+  a.search('相机');
+  assert.match(a.$('#suggestions').textContent, /我是小鹿/);
+  assert.equal(a.d.querySelectorAll('.suggestion-response').length, 1);
+  assert.ok(a.$('#suggestions [data-search="旧馆站"]'));
+  assert.ok(a.$('[data-item="0810"]'));
+  let messages = a.state().clues.filter((c) => c.id.startsWith('xiaolu-'));
+  assert.equal(messages.length, 1);
+  assert.deepEqual(Array.from(messages[0].body), ['我是小鹿，先替你查。']);
+  a.click('#suggestions .suggestion-response');
+  assert.match(a.$('#suggestions').textContent, /别只对名称/);
+  a.click('#suggestions .suggestion-response');
+  assert.match(a.$('#suggestions').textContent, /你捡过什么/);
+  a.click('#suggestions .suggestion-response');
+  assert.match(a.$('#suggestions').textContent, /我也丢过/);
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith('xiaolu-')).length, 4);
+  assert.ok(!a.state().flags.includes('staff'));
+  assert.equal(a.$('#application-panel').hidden, true);
+});
+test("小鹿前段可乱序交谈，多入口都能触发但不泄露员工谜底", (t) => {
+  for (const query of ['钱包', '钥匙', '证件', '雨伞', '门票', '胶卷']) {
+    const a = boot(t);
+    a.click('#intro-skip');
+    a.search(query);
+    assert.match(a.$('#suggestions').textContent, /我是小鹿/);
+  }
+  const a = boot(t);
+  a.click('#intro-skip');
+  a.search('你在哪');
+  assert.match(a.$('#suggestions').textContent, /B3/);
+  a.search('你是谁');
+  assert.match(a.$('#suggestions').textContent, /我叫小鹿/);
+  a.search('小鹿');
+  assert.match(a.$('#suggestions').textContent, /只有我/);
+  a.search('你是谁');
+  assert.match(a.$('#suggestions').textContent, /建议里/);
+  a.search('客服');
+  assert.equal(a.$('#suggestions').hidden, true);
+  a.search('我要关了');
+  assert.match(a.$('#suggestions').textContent, /别关/);
+  a.search('帮帮我');
+  assert.match(a.$('#suggestions').textContent, /看到我/);
+  assert.doesNotMatch(a.state().clues.map((c) => c.body.join('')).join(''), /west1103|danny\.late|5003|你就是下一个|岗位职责/);
+  for (const query of ['系统', '算法', '天气']) {
+    a.search(query);
+    assert.equal(a.$('#suggestions').hidden, true);
+  }
+});
+test("前段续读跨刷新保留，新证据改变回应，终局后沉默且注销可重玩", (t) => {
+  const local = memory(), a = boot(t, 'index', local);
+  a.click('#intro-skip');
+  a.search('你是谁');
+  const before = a.state().clues.length;
+  const b = boot(t, 'index', local, memory(), '#search');
+  assert.equal(b.state().clues.length, before);
+  b.search('你是谁');
+  assert.match(b.$('#suggestions').textContent, /只有我/);
+  makeStore(local).collect(data.files.trace);
+  b.search('你是谁');
+  assert.match(b.$('#suggestions').textContent, /你还记得/);
+  b.search('Danny');
+  assert.match(b.$('#suggestions').textContent, /你回来了/);
+  makeStore(local).mark('staff');
+  makeStore(local).finish('left');
+  b.w.dispatchEvent(new b.w.StorageEvent('storage', { key: b.w.ZHAOHUI_JOURNEY.key }));
+  assert.equal(b.$('#suggestions').hidden, true);
+  b.search('小鹿');
+  assert.equal(b.$('#suggestions').hidden, true);
+  b.click('#reset'); b.click('#confirm-reset'); b.click('#intro-skip');
+  b.search('钱包');
+  assert.match(b.$('#suggestions').textContent, /我是小鹿/);
+});
+
+test("回退查询与从收藏返回不会替玩家消耗小鹿下一句", (t) => {
+  const a = boot(t);
+  a.click('#intro-skip');
+  a.search('你是谁');
+  a.search('你在哪');
+  const before = a.state().clues.length;
+  a.click('#query-back');
+  assert.equal(a.state().clues.length, before);
+  a.click('[data-nav=mine]');
+  a.click('#notebook-return');
+  assert.equal(a.state().clues.length, before);
+  a.search('你是谁');
+  assert.match(a.$('#suggestions').textContent, /只有我/);
+});
+
+function describeFound(a) {
+  for (let i = 0; i < 3; i++) a.search('你丢了什么');
+  assert.ok(a.state().clues.some((c) => c.id === 'xiaolu-arrival-lost-2'));
+}
+function offerFound(a, id) {
+  a.click('[data-nav=mine]');
+  a.click(`[data-inspect-found="${id}"]`);
+  a.click(`[data-return-found="${id}"]`);
+}
+test("随身三件拾获物需先检查并听完失物特征，不改变玩家自己的目标", (t) => {
+  const a = boot(t);
+  a.click('#intro-skip');
+  a.click('[data-nav=mine]');
+  assert.equal(a.d.querySelectorAll('.found-object').length, 3);
+  assert.doesNotMatch(a.$('.found-pocket').textContent, /焦黑/);
+  a.click('[data-inspect-found=packet]');
+  assert.match(a.$('#modal-body').textContent, /焦黑/);
+  assert.equal(a.$('[data-return-found=packet]').disabled, true);
+  assert.equal(a.state().belongings.returned, false);
+  a.click('#close-modal');
+  assert.equal(a.d.activeElement.dataset.inspectFound, 'packet');
+  describeFound(a);
+  assert.equal(a.state().goal, '');
+  a.search('钱包');
+  describeFound(a);
+  assert.equal(a.state().goal, '钱包');
+  assert.match(a.$('#suggestions').textContent, /已保存/);
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith('xiaolu-arrival-lost')).length, 3);
+});
+test("交错物品保留在袋中并给出具体回应，同一错误不重复说话", (t) => {
+  const a = boot(t);
+  a.click('#intro-skip');
+  describeFound(a);
+  offerFound(a, 'key');
+  assert.match(a.$('#suggestions .suggestion-response').textContent, /没有齿/);
+  assert.equal(a.state().belongings.returned, false);
+  assert.ok(!a.state().clues.some((c) => c.id === 'found-return-receipt'));
+  offerFound(a, 'key');
+  assert.equal(a.$('#suggestions .suggestion-response'), null);
+  assert.match(a.$('#suggestions').textContent, /此前已核对/);
+  offerFound(a, 'sleeve');
+  assert.match(a.$('#suggestions .suggestion-response').textContent, /烧痕/);
+  assert.equal(a.state().belongings.returned, false);
+  a.click('[data-nav=mine]');
+  assert.match(a.$('#found-title').textContent, /3 件/);
+});
+test("交还正确物品保存回执并开放 Danny 的关键便笺，仍需自己解员工凭证", (t) => {
+  const local = memory(), a = boot(t, 'index', local);
+  a.click('#intro-skip');
+  describeFound(a);
+  offerFound(a, 'packet');
+  assert.equal(a.state().belongings.returned, true);
+  assert.match(a.$('#suggestions').textContent, /是这颗/);
+  assert.equal(a.state().clues.filter((c) => c.id === 'found-return-receipt').length, 1);
+  assert.ok(!a.state().flags.includes('staff'));
+  assert.equal(a.$('#application-panel').hidden, true);
+  a.click('[data-nav=mine]');
+  assert.match(a.$('#found-title').textContent, /2 件/);
+  a.click('[data-inspect-found=packet]');
+  assert.equal(a.$('[data-return-found]'), null);
+  const b = boot(t, 'danny', local, memory(), '#journal--return-note');
+  assert.match(b.$('#reading-pane').textContent, /两边没有同步/);
+  assert.ok(b.state().clues.some((c) => c.id === 'return-note'));
+  assert.ok(!b.$('[data-read=night]'));
+  const reload = boot(t, 'index', local, memory(), '#mine');
+  assert.match(reload.$('#found-title').textContent, /2 件/);
+  assert.equal(reload.state().belongings.returned, true);
+});
+test("未交还的游客不能通过深链接和站内搜索偷看奖励便笺", (t) => {
+  const a = boot(t, 'danny', memory(), memory(), '#journal--return-note');
+  assert.ok(!a.state().clues.some((c) => c.id === 'return-note'));
+  assert.doesNotMatch(a.$('#reading-pane').textContent, /两边没有同步/);
+  a.set('#site-search', '对钟'); a.submit('#site-search-form');
+  assert.ok(!a.$('.entry-list [data-read=return-note]'));
+});
+test("另一个窗口交还后 Danny 游客目录会开放奖励，错误物品不会解锁", (t) => {
+  const local = memory(), a = boot(t, 'index', local);
+  a.click('#intro-skip');
+  const b = boot(t, 'danny', local);
+  assert.ok(!b.$('.entry-list [data-read=return-note]'));
+  describeFound(a); offerFound(a, 'sleeve');
+  b.w.dispatchEvent(new b.w.StorageEvent('storage', { key: b.w.ZHAOHUI_JOURNEY.key }));
+  assert.ok(!b.$('.entry-list [data-read=return-note]'));
+  offerFound(a, 'packet');
+  b.w.dispatchEvent(new b.w.StorageEvent('storage', { key: b.w.ZHAOHUI_JOURNEY.key }));
+  assert.ok(b.$('.entry-list [data-read=return-note]'));
+});
+test("注销重置物品和奖励，旧轮次交还与终局后的交还不会改写存档", (t) => {
+  const local = memory(), store = makeStore(local);
+  store.update((s) => { s.introduced = true; });
+  store.inspectFound('packet');
+  store.collect({ id: 'xiaolu-arrival-lost-2', title: '包纸的一角是焦的。', kind: 'message' });
+  const old = store.read().runToken;
+  store.reset();
+  store.update((s) => { s.introduced = true; });
+  store.inspectFound('packet');
+  store.collect({ id: 'xiaolu-arrival-lost-2', title: '包纸的一角是焦的。', kind: 'message' });
+  assert.equal(store.returnFound('packet', old).outcome, 'blocked');
+  assert.equal(store.read().belongings.returned, false);
+  assert.equal(store.returnFound('unknown', store.read().runToken).outcome, 'blocked');
+  store.mark('staff'); store.finish('left');
+  assert.equal(store.returnFound('packet', store.read().runToken).outcome, 'blocked');
+  store.reset();
+  assert.deepEqual(store.read().belongings, { inspected: [], returned: false });
+  assert.ok(!store.read().clues.some((c) => c.id === 'found-return-receipt'));
+});
+
+test("较多既有收藏不会挤掉新增物品回执，奖励可在完整调查后保存", (t) => {
+  const local = memory(), store = makeStore(local);
+  store.update((s) => {
+    s.introduced = true;
+    s.clues = Array.from({ length: 100 }, (_, i) => ({ id: 'existing-' + i, title: '已取得材料 ' + i, kind: 'record', body: [] }));
+  });
+  const a = boot(t, 'index', local);
+  describeFound(a);
+  offerFound(a, 'packet');
+  assert.ok(a.state().clues.some((c) => c.id === 'found-return-receipt'));
+  assert.equal(a.state().clues.filter((c) => c.id.startsWith('existing-')).length, 100);
 });

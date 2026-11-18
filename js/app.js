@@ -4,7 +4,8 @@
     store = window.ZHAOHUI_JOURNEY,
     data = window.ZHAOHUI,
     matcher = window.ZHAOHUI_MATCHER,
-    searchIndex = window.ZHAOHUI_SEARCH;
+    searchIndex = window.ZHAOHUI_SEARCH,
+    motion = window.ZHAOHUI_MOTION;
   const esc = (v) =>
     String(v ?? "").replace(
       /[&<>"']/g,
@@ -23,8 +24,11 @@
     deletedNotes = [],
     itemCategory = "all",
     currentNav = "home",
+    displayedQuery = "",
     pendingChoice = null,
-    toastTimer;
+    claimDraft = "",
+    toastTimer,
+    navigationStamp = "";
   const has = (id) => store.read().clues.some((c) => c.id === id);
   const label = {
     page: "页面入口",
@@ -50,12 +54,15 @@
   }
   function modal(title, html) {
     $("#modal-label").textContent = title;
+    motion.cancelTree($("#modal-body"));
+    delete $("#modal-body").dataset.foundItem;
     $("#modal-body").innerHTML = html;
     $("#modal").classList.toggle(
       "comparison-dialog",
       !!$("#modal-body .comparison-columns"),
     );
     if (!$("#modal").open) $("#modal").showModal();
+    motion.enter($("#modal-body"));
   }
   function fileBody(file) {
     return `${file.fields?.length ? `<dl class="detail-list">${file.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${file.image ? `<a href="${esc(file.image)}" target="_blank" rel="noopener"><img class="evidence-image" src="${esc(file.image)}" alt="${esc(file.title)}"></a>` : ""}${(file.body || []).map((t) => `<p>${esc(t)}</p>`).join("")}`;
@@ -70,6 +77,14 @@
   }
   function updateChrome() {
     const s = store.read();
+    motion.sync();
+    const motionToggle = $("#motion-toggle");
+    if (motionToggle) {
+      motionToggle.setAttribute("aria-pressed", String(s.settings.reduced));
+      motionToggle.textContent = s.settings.reduced
+        ? "已减少动态效果"
+        : "减少动态效果";
+    }
     let guide = $("#journey-guide");
     if (!guide) {
       guide = document.createElement("section");
@@ -144,14 +159,89 @@
         )
         .join("");
   }
+  function foundPocket(s) {
+    if (!s.introduced) return "";
+    const ready = has("xiaolu-arrival-lost-2");
+    return `<section class="found-pocket" aria-labelledby="found-title"><div class="found-pocket-head"><h3 id="found-title" tabindex="-1">随身拾获物 / ${s.belongings.returned ? 2 : 3} 件待交还</h3><span>旧馆站 · 尚未上交</span></div><p>折返时捡到的三样东西。先检查细节，再和失主的描述核对；交还物品无需填写姓名。</p>${!s.ending && !s.clues.some((c) => c.id.startsWith("whisper-truth")) && !s.belongings.returned ? `<button type="button" class="text-link" data-search="你丢了什么">${ready ? "复查小鹿的失物描述" : "问问小鹿丢了什么"}</button>` : ""}<div class="found-pocket-grid">${data.foundItems.map((item) => `<article class="found-object"><span>${item.id === "packet" && s.belongings.returned ? "已交还给小鹿" : "待核实失主"}</span><h4>${esc(item.title)}</h4><p>${esc(item.summary)}</p>${s.belongings.inspected.includes(item.id) ? `<p class="found-observation">${esc(item.details)}</p>` : ""}<button type="button" data-inspect-found="${item.id}">${s.belongings.inspected.includes(item.id) ? "再次查看" : "拿出来检查"}</button></article>`).join("")}</div>${s.belongings.returned ? '<p class="found-receipt-link"><a href="danny.html#journal--return-note">查看小鹿给出的来访便笺 &gt;&gt;</a></p>' : ""}</section>`;
+  }
+  function inspectFound(id) {
+    const item = data.foundItems.find((x) => x.id === id);
+    if (!item) return;
+    const s = store.inspectFound(id);
+    if (document.body.classList.contains("notebook-mode")) renderMine();
+    const active = s.introduced && !s.ending && !s.belongings.returned &&
+      !s.clues.some((c) => c.id.startsWith("whisper-truth"));
+    modal("随身拾获物 / " + item.title,
+      `<h2>${esc(item.title)}</h2><p>${esc(item.details)}</p><p>${s.belongings.returned && id === "packet" ? "旧纸包与玻璃珠已交还，检查记录仍可回看。" : "物品还在你的随身袋中。"}</p>${active ? `<p>${has("xiaolu-arrival-lost-2") ? "与失主的描述核对后，可登记交还。" : "尚未听完失物特征，先向小鹿核实。"}</p><button type="button" class="record-action" data-return-found="${id}" data-run="${esc(s.runToken)}" ${has("xiaolu-arrival-lost-2") ? "" : "disabled"}>交还给小鹿</button><button type="button" class="text-link" data-search="你丢了什么">询问失物特征</button>` : ""}<p><a href="index.html#mine" data-pocket-focus>回到随身拾获物 &gt;&gt;</a></p>`);
+    $("#modal-body").dataset.foundItem = id;
+  }
+  function handOverFound(button) {
+    const item = data.foundItems.find((x) => x.id === button.dataset.returnFound);
+    if (!item) return;
+    const result = store.returnFound(item.id, button.dataset.run);
+    if (result.outcome === "blocked" || result.outcome === "already") {
+      button.disabled = true;
+      toast(result.outcome === "already" ? "本轮交还已经完成，请回随身袋查看回执。" : "物品或查档状态已更新，请重新核对。");
+      return;
+    }
+    const success = result.outcome === "returned";
+    if (success) store.collect(data.files["found-receipt"]);
+    const id = "found-response-" + item.id;
+    const spoken = has(id);
+    if (!spoken) store.collect({ id, kind: "message", title: "查询建议 / 物品核对",
+      source: "找回网 · 实际显示的查询建议", body: [item.reply], summary: item.reply });
+    $("#modal").close();
+    search("交还 " + item.title, { respond: false });
+    motion.cancelTree($("#suggestions"));
+    $("#suggestions").hidden = false;
+    $("#suggestions").innerHTML = (spoken ? '<p class="found-system-note">这件物品此前已核对，不符合失主描述，仍保留在随身袋中。</p>' : `<${success ? 'a href="danny.html#journal--return-note"' : "div"} class="suggestion-response">${esc(item.reply)}</${success ? "a" : "div"}>`) +
+      (success ? '<p class="found-system-note">已交还旧纸包与蓝玻璃珠。小鹿提供的便笺索引与回执已收入“我的”。</p><a class="found-suggestion-link" href="danny.html#journal--return-note">打开小鹿给出的旧地址 &gt;&gt;</a>' : '') +
+      '<a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>回到随身拾获物 &gt;&gt;</a>';
+    motion.enter($("#suggestions"));
+    $("#suggestions").scrollIntoView?.({ block: "nearest" });
+    updateChrome();
+  }
+  function earlyWhisper(s) {
+    const query = $("#search").value;
+    const records = searchIndex.matches(query, data.items);
+    const reply = window.ZHAOHUI_XIAOLU.next(query, s, { itemMatch: records.length > 0 });
+    if (!reply) {
+      if (!s.ending && !s.clues.some((c) => c.id.startsWith("whisper-truth")) &&
+        /你丢了什么|你的失物/.test(matcher.fold(query)) && has("xiaolu-arrival-lost-2")) {
+        $("#suggestions").hidden = false;
+        $("#suggestions").innerHTML = '<p class="found-system-note">已保存的失物描述：能透光，装在纸里；包纸的一角是焦的。</p><a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>查看随身拾获物 &gt;&gt;</a>';
+      }
+      return false;
+    }
+    const ordinary = searchIndex.related(records, query).slice(0, 2);
+    motion.cancelTree($("#suggestions"));
+    $("#suggestions").hidden = false;
+    $("#suggestions").innerHTML =
+      ordinary.slice(0, 1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("") +
+      `<button type="button" class="suggestion-response" data-search="${esc(reply.text)}" title="用这句话继续查询">${esc(reply.text)}</button>` +
+      ordinary.slice(1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("") +
+      (reply.context === "lost" ? '<a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>查看随身拾获物 &gt;&gt;</a>' : "");
+    motion.enter($("#suggestions"), { items: ".suggestion-response" });
+    store.collect({
+      id: reply.id, kind: "message", title: "查询建议 / " + reply.text,
+      source: "找回网 · 实际显示的查询建议", summary: reply.text, body: [reply.text],
+    });
+    updateChrome();
+    return true;
+  }
   function whisper() {
     const s = store.read();
-    if (
-      s.ending ||
-      !(has("anomaly") || has("clause") || s.flags.includes("verified"))
-    )
+    if (s.ending) return;
+    if (!s.flags.includes("staff") && !s.flags.includes("verified") &&
+      !has("clause") && !has("conversation")) {
+      earlyWhisper(s);
       return;
+    }
     const q = matcher.fold($("#search").value);
+    if (/你捡过|你也丢|你丢了什么|捡到的|你的失物|你的东西|还给你|能透光装在纸里|包纸的一角是焦的|我也丢过一样东西/.test(q)) {
+      earlyWhisper(s);
+      return;
+    }
     const stage = s.flags.includes("verified")
       ? "truth"
       : has("conversation")
@@ -191,9 +281,11 @@
                 ? ["我是小鹿。", "旧记录还在。"]
                 : ["你看到旧档了。", "我还在等。"];
     $("#suggestions").hidden = false;
+    motion.cancelTree($("#suggestions"));
     $("#suggestions").innerHTML = words
       .map((t) => `<div class="suggestion-response">${esc(t)}</div>`)
       .join("");
+    motion.enter($("#suggestions"), { items: ".suggestion-response" });
     store.collect({
       id,
       kind: "message",
@@ -230,6 +322,7 @@
     return `<button class="item" data-item="${esc(item.id)}"><span class="item-image"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="item-register-id">${esc(item.id)}</span></span><span class="item-body"><span class="item-title"><strong>${esc(item.name)}</strong><span class="badge">待认领</span></span><span class="item-description">${esc(item.description)}</span><span class="item-meta"><span>${esc(item.place)}</span><span>${esc(item.date)}</span></span></span></button>`;
   }
   function renderResults(query = "") {
+    displayedQuery = query;
     const s = store.read(),
       q = matcher.fold(query);
     const items = searchIndex
@@ -286,6 +379,7 @@
           `<button data-item-category="${id}" aria-pressed="${itemCategory === id}">${name}</button>`,
       )
       .join("")}</div>`;
+    motion.cancelTree($("#results"));
     $("#results").innerHTML = filters + html;
     renderApplication();
   }
@@ -300,15 +394,36 @@
       .join("");
     $("#query-navigation").hidden =
       document.body.classList.contains("notebook-mode") ||
-      !$("#search").value ||
+      !displayedQuery ||
       history.length < 2;
     $("#query-back").disabled = s.searchCursor <= 0;
     $("#query-forward").disabled = s.searchCursor >= history.length - 1;
     $("#query-position").textContent = history.length
-      ? `${s.searchCursor + 1} / ${history.length}`
+      ? s.searchCursor < 0
+        ? "独立查阅"
+        : `${s.searchCursor + 1} / ${history.length}`
       : "";
   }
-  function search(query, { record = true } = {}) {
+  function stampNavigation() {
+    return location.hash + "|" + JSON.stringify(history.state);
+  }
+  function commitView(hash, { replace = false } = {}) {
+    const state = {
+      zhaohui: 1,
+      runToken: store.read().runToken,
+      hash,
+      query: displayedQuery,
+      cursor: store.read().searchCursor,
+    };
+    if (replace) history.replaceState(state, "", hash);
+    else if (
+      location.hash !== hash ||
+      JSON.stringify(history.state) !== JSON.stringify(state)
+    )
+      history.pushState(state, "", hash);
+    navigationStamp = stampNavigation();
+  }
+  function search(query, { record = true, syncUrl = true, respond = true } = {}) {
     query = String(query).trim().slice(0, 80);
     if (!query) {
       $("#search").focus();
@@ -328,14 +443,17 @@
         s.searchHistory = s.searchHistory.slice(-12);
         s.searchCursor = s.searchHistory.length - 1;
       }
-      if (!s.goal && !/^(你好|谢谢|天气|系统)$/.test(query)) s.goal = query;
+      if (!s.goal && !/^(你好|谢谢|天气|系统)$/.test(query) &&
+        !/^(你丢了什么|你的失物|你的东西|你捡过|我也丢过|能透光|包纸|交还)/.test(matcher.fold(query))) s.goal = query;
     });
     renderResults(query);
     updateChrome();
-    whisper();
+    if (respond) whisper();
     matchInput(query, { submitted: true });
+    if (syncUrl) commitView("#search");
+    motion.enter($("#results"), { items: ".item" });
   }
-  function home({ remember = true, section = "home" } = {}) {
+  function home({ remember = true, section = "home", syncUrl = true } = {}) {
     itemCategory = "all";
     currentNav = section;
     if (remember) store.update((s) => (s.lastQuery = ""));
@@ -345,6 +463,8 @@
     clearMatch();
     renderResults();
     updateChrome();
+    if (syncUrl) commitView(section === "all" ? "#all" : "#home");
+    motion.enter($("#results"), { items: ".item" });
   }
   function renderApplication() {
     const s = store.read();
@@ -354,13 +474,16 @@
       panel.id = "application-panel";
       $(".content-grid").after(panel);
     }
+    claimDraft = s.ending
+      ? ""
+      : (panel.querySelector("[name=name]")?.value ?? claimDraft);
     panel.hidden =
       !s.flags.includes("staff") ||
       !(has("anomaly") || has("clause") || s.flags.includes("verified")) ||
       !!s.ending;
-    panel.innerHTML = `<h2>特殊人员认领申请</h2><p>员工站附件关联到客服 0001 的人员认领。这不是你失物的领取单。${s.flags.includes("verified") ? "你已经完成归档关系核验。" : "资料尚未全部核对，可以继续调查后再决定。"}</p><a href="danny.html#archive">回归档室核对材料 &gt;&gt;</a><form id="claim-form" class="claim-form"><label>认领对象<input value="小鹿 / 客服 0001" readonly></label><label>认领人姓名<input name="name" required maxlength="30" autocomplete="off"></label><label class="claim-terms">认领人承担该对象在系统中遗留的全部责任、义务与岗位职责。提交前将再次核对。</label><button class="record-action" type="submit">核对并准备签署</button><button class="text-link" type="button" id="leave">放弃本次认领</button></form>`;
+    panel.innerHTML = `<h2>特殊人员认领申请</h2><p>员工站附件关联到客服 0001 的人员认领。这不是你失物的领取单。${s.flags.includes("verified") ? "你已经完成归档关系核验。" : "资料尚未全部核对，可以继续调查后再决定。"}</p><a href="danny.html#archive">回归档室核对材料 &gt;&gt;</a><form id="claim-form" class="claim-form"><label>认领对象<input value="小鹿 / 客服 0001" readonly></label><label>认领人姓名<input name="name" value="${esc(claimDraft)}" required maxlength="30" autocomplete="off"></label><label class="claim-terms">认领人承担该对象在系统中遗留的全部责任、义务与岗位职责。提交前将再次核对。</label><button class="record-action" type="submit">核对并准备签署</button><button class="text-link" type="button" id="leave">放弃本次认领</button></form>`;
   }
-  function renderMine() {
+  function renderMine({ animate = false } = {}) {
     document.body.classList.add("notebook-mode");
     $("#suggestions").hidden = true;
     clearMatch();
@@ -376,8 +499,9 @@
           c.kind === mineFilter,
       );
     const notes = searchIndex.matches(mineQuery, s.notes);
+    motion.cancelTree($("#results"));
     $("#results").innerHTML =
-      `<section class="notebook"><div class="notebook-top"><p>这里保存已经取得的材料。个人备注仅代表推测，不会自动解锁剧情。</p><button class="text-link" id="notebook-return">返回查阅 &gt;&gt;</button></div><form id="notebook-search-form" class="notebook-search"><label class="sr-only" for="notebook-search">搜索收藏与备注</label><input id="notebook-search" value="${esc(mineQuery)}" placeholder="搜索标题、正文、字段和自己的备注" maxlength="80"><button>查找材料</button>${mineQuery ? '<button type="button" id="clear-notebook-search">清除筛选</button>' : ""}</form><div class="notebook-tabs">${[
+      `<section class="notebook">${foundPocket(s)}<div class="notebook-top"><p>这里保存已经取得的材料。个人备注仅代表推测，不会自动解锁剧情。</p><button class="text-link" id="notebook-return">返回查阅 &gt;&gt;</button></div><form id="notebook-search-form" class="notebook-search"><label class="sr-only" for="notebook-search">搜索收藏与备注</label><input id="notebook-search" value="${esc(mineQuery)}" placeholder="搜索标题、正文、字段和自己的备注" maxlength="80"><button>查找材料</button>${mineQuery ? '<button type="button" id="clear-notebook-search">清除筛选</button>' : ""}</form><div class="notebook-tabs">${[
         ["all", "全部"],
         ["page", "页面"],
         ["record", "档案"],
@@ -394,6 +518,7 @@
           "",
         )}</div><div class="compare-toolbar"><span id="compare-count">已选 ${selected.length} / 2 份材料</span><button id="compare-files" ${selected.length !== 2 ? "disabled" : ""}>并排对照</button><button id="new-note">写一条笔记</button><button id="export-notebook">导出线索与笔记</button></div>${mineFilter !== "note" ? entries.map((c) => `<article class="notebook-card"><div class="notebook-card-head"><span>${label[c.kind]}</span><button data-star="${esc(c.id)}" aria-pressed="${c.starred}">${c.starred ? "★ 已标重点" : "☆ 标记重点"}</button></div><h3>${esc(c.title)}</h3><p>${esc(c.summary)}</p><small>来源：${esc(c.source)}</small>${c.note ? `<blockquote>我的备注：${esc(c.note)}</blockquote>` : ""}<div class="notebook-card-actions"><button data-file="${esc(c.id)}">查看副本 / 备注</button>${c.url ? `<a href="${esc(c.url)}">来源页面 &gt;&gt;</a>` : ""}<label><input type="checkbox" data-compare="${esc(c.id)}" ${selected.includes(c.id) ? "checked" : ""}> 选入对照</label></div></article>`).join("") : ""}${["all", "note", "starred"].includes(mineFilter) && mineFilter !== "starred" ? notes.map((n) => `<article class="notebook-card personal-note"><span>个人推测</span><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p><div class="notebook-card-actions"><button data-edit-note="${esc(n.id)}">修改笔记</button><button data-delete-note="${esc(n.id)}">移除笔记</button></div></article>`).join("") : ""}${!(mineFilter === "note" ? notes.length : entries.length + (mineFilter === "all" ? notes.length : 0)) ? '<div class="empty"><h3>这个分类还没有材料</h3><p>保存公开登记或阅读站内附件，取得的材料会出现在这里。</p></div>' : ""}</section>`;
     updateChrome();
+    if (animate) motion.enter($("#results"), { items: ".notebook-card" });
   }
   function compare() {
     const files = selected
@@ -407,7 +532,7 @@
     );
   }
   function review(ending, name = "") {
-    pendingChoice = { ending, name };
+    pendingChoice = { ending, name, runToken: store.read().runToken };
     modal(
       "最后确认",
       `<h2>${ending === "claimed" ? "确认签署这份人员认领？" : "确认放弃本次认领？"}</h2><p>${ending === "claimed" ? `认领人：${esc(name)}。对象为小鹿 / 客服 0001，按完整附则继受责任与岗位。` : "确认后本次特殊申请结束。关闭这个窗口则保留待决定状态。"}</p><button class="record-action" id="confirm-choice">确认${ending === "claimed" ? "签署" : "放弃"}</button><button class="text-link" id="cancel-choice">返回继续查阅</button>`,
@@ -424,9 +549,13 @@
     if (localTarget && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
       e.preventDefault();
       const hash = "#" + localTarget[1];
-      if (location.hash !== hash) history.pushState(null, "", hash);
+      if (hash === "#search") $("#search").value = displayedQuery;
+      commitView(hash);
       navigateToHash(hash);
+      if (b.hasAttribute("data-pocket-focus")) $("#found-title")?.focus();
     }
+    if (b.dataset.inspectFound) inspectFound(b.dataset.inspectFound);
+    if (b.dataset.returnFound) handOverFound(b);
     if (b.dataset.search) {
       e.preventDefault();
       if ($("#modal").open) $("#modal").close();
@@ -437,12 +566,13 @@
         cursor = s.searchCursor + (b.id === "query-back" ? -1 : 1);
       if (cursor >= 0 && cursor < s.searchHistory.length) {
         store.update((x) => (x.searchCursor = cursor));
-        search(s.searchHistory[cursor], { record: false });
+        search(s.searchHistory[cursor], { record: false, respond: false });
       }
     }
     if (b.id === "clear-notebook-search") {
       mineQuery = "";
-      renderMine();
+      renderMine({ animate: true });
+      $("#notebook-search").focus({ preventScroll: true });
     }
     if (b.dataset.editNote) {
       const n = store.read().notes.find((n) => n.id === b.dataset.editNote);
@@ -492,13 +622,15 @@
     }
     if (b.dataset.itemCategory) {
       itemCategory = b.dataset.itemCategory;
-      renderResults($("#search").value);
+      renderResults(displayedQuery);
       updateChrome();
     }
     if (b.dataset.nav) {
       e.preventDefault();
-      if (b.dataset.nav === "mine") renderMine();
-      else if (["home", "all"].includes(b.dataset.nav))
+      if (b.dataset.nav === "mine") {
+        renderMine({ animate: true });
+        commitView("#mine");
+      } else if (["home", "all"].includes(b.dataset.nav))
         home({ section: b.dataset.nav });
       else if (b.dataset.nav === "guide")
         modal(
@@ -508,7 +640,7 @@
       else if (b.dataset.nav === "register")
         modal(
           "拾物登记",
-          '<h2>登记拾获物品</h2><form id="register-form" class="register-form"><label>物品名称<input name="name" required maxlength="60"></label><label>拾获地点<input name="place" required maxlength="80"></label><label>描述<textarea name="description" required maxlength="300"></textarea></label><p>本机演示登记，不会发送到服务器。</p><button class="record-action">保存本机登记</button></form>',
+          '<h2>登记拾获物品</h2><form id="register-form" class="register-form"><label>物品名称<input name="name" required maxlength="60"></label><label>拾获地点<input name="place" required maxlength="80"></label><label>描述<textarea name="description" required maxlength="300"></textarea></label><p>本机演示登记，不会发送到服务器。</p><p id="register-error" class="form-error" role="alert" hidden></p><button class="record-action">保存本机登记</button></form>',
         );
     }
     if (b.hasAttribute("data-anomaly")) {
@@ -570,11 +702,17 @@
     if (b.dataset.file) openFile(b.dataset.file);
     if (b.dataset.filter) {
       mineFilter = b.dataset.filter;
-      renderMine();
+      renderMine({ animate: true });
+      document.querySelector(`[data-filter="${mineFilter}"]`).focus({ preventScroll: true });
     }
     if (b.dataset.star) {
-      store.star(b.dataset.star);
+      const id = b.dataset.star;
+      store.star(id);
       renderMine();
+      const target = [...document.querySelectorAll("[data-star]")].find((n) => n.dataset.star === id)
+        || document.querySelector(`[data-filter="${mineFilter}"]`);
+      target.focus({ preventScroll: true });
+      motion.feedback(target);
     }
     if (b.id === "compare-files") compare();
     if (b.id === "new-note")
@@ -584,7 +722,7 @@
       );
     if (b.id === "notebook-return") {
       document.body.classList.remove("notebook-mode");
-      store.read().lastQuery ? search(store.read().lastQuery) : home();
+      displayedQuery ? search(displayedQuery, { respond: false }) : home({ section: currentNav });
     }
     if (b.id === "close-modal" || b.id === "cancel-choice") {
       $("#modal").close();
@@ -594,17 +732,32 @@
     if (b.id === "confirm-choice" && pendingChoice) {
       const choice = pendingChoice;
       pendingChoice = null;
-      store.finish(choice.ending, choice.name);
+      const result = store.finish(choice.ending, choice.name, choice.runToken);
       $("#modal").close();
+      if (result.runToken !== choice.runToken) {
+        restoreNavigation();
+        refreshSharedState();
+        return;
+      }
       home();
-      if (choice.ending === "claimed") {
+      if (
+        result.ending !== choice.ending ||
+        (result.ending === "claimed" && result.name !== choice.name)
+      )
+        toast("本轮已有结局，已恢复当前保存的记录。");
+      if (result.ending === "claimed") {
         $("#ending-reveal").hidden = false;
         $("#ending-status").textContent = "认领完成 / 岗位移交";
-        $("#ending-name").textContent = `客服 0001 / ${choice.name}`;
+        $("#ending-name").textContent = `客服 0001 / ${result.name}`;
         $("#ending").showModal();
       }
     }
     if (b.id === "return-home") $("#ending").close();
+    if (b.id === "motion-toggle") {
+      store.update((s) => (s.settings.reduced = !s.settings.reduced));
+      motion.sync();
+      updateChrome();
+    }
     if (b.id === "match-toggle") {
       store.update((s) => (s.settings.assist = !s.settings.assist));
       syncAssist();
@@ -619,22 +772,39 @@
           ? "个人站的公开随记、相册与留言可能相互解释。过期信息可以用生效日期排除。"
           : "除了名称，也可以试试描述里的地点和物品特征，登记通常保留了来源说明。";
     }
+    if (b.hasAttribute("data-reset-game")) $("#reset").click();
     if (b.id === "reset")
       modal(
-        "清除本机记录",
-        '<h2>重新开始新版调查？</h2><p>将清除新版线索、笔记和结局；旧版存档不受影响。</p><button id="confirm-reset" class="record-action">清除新版记录</button>',
+        "注销并重新开始",
+        '<h2>注销并从头开始游戏？</h2><p>本轮的进度、线索、笔记、登记和结局将被清除，员工登录也会退出。确认后回到开场引导。</p><button id="confirm-reset" class="record-action">确认注销并重新开始</button><button id="cancel-choice" class="text-link">取消，继续本轮游戏</button>',
       );
     if (b.id === "confirm-reset") {
+      motion.cancelAll();
       store.reset();
       try {
         sessionStorage.removeItem("harrow-session");
+        sessionStorage.removeItem("harrow-run-token");
       } catch {}
       selected = [];
       mineQuery = "";
+      mineFilter = "all";
       deletedNotes = [];
-      $("#modal").close();
-      home();
-      $("#intro").showModal();
+      claimDraft = "";
+      $("#application-panel")?.remove();
+      document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+      home({ syncUrl: false });
+      commitView("#home", { replace: true });
+      syncAssist();
+      clearTimeout(toastTimer);
+      $("#toast").hidden = true;
+      $("#toast").replaceChildren();
+      $("#intro-form").reset();
+      $("#hint-content").hidden = true;
+      $("#hint-toggle").setAttribute("aria-expanded", "false");
+      $("#hint-body").textContent = "";
+      $("#ending-reveal").hidden = true;
+      $("#ending-name").textContent = "";
+      if (!$("#intro").open) $("#intro").showModal();
     }
   });
   document.addEventListener("change", (e) => {
@@ -652,6 +822,12 @@
     $("#compare-files").disabled = selected.length !== 2;
   });
   document.addEventListener("input", (e) => {
+    const registration = e.target.closest("#register-form");
+    if (registration && e.target.value.trim()) {
+      e.target.removeAttribute("aria-invalid");
+      if (!registration.querySelector("[aria-invalid=true]"))
+        $("#register-error").hidden = true;
+    }
     if (e.target.id === "clue-note") {
       store.annotate(e.target.dataset.id, e.target.value);
       $("#note-save-status").textContent = "备注已保存在本机。";
@@ -662,7 +838,8 @@
     if (form.id === "notebook-search-form") {
       e.preventDefault();
       mineQuery = $("#notebook-search").value.trim();
-      renderMine();
+      renderMine({ animate: true });
+      $("#notebook-search").focus({ preventScroll: true });
     }
     if (form.id === "edit-note-form") {
       e.preventDefault();
@@ -707,13 +884,30 @@
     }
     if (form.id === "register-form") {
       e.preventDefault();
-      const f = new FormData(form);
-      store.update((s) =>
-        s.registrations.push({
-          id: "local-" + Date.now(),
+      const f = new FormData(form),
+        values = {
           name: String(f.get("name")).trim(),
           place: String(f.get("place")).trim(),
           description: String(f.get("description")).trim(),
+        };
+      let invalid = false;
+      for (const [name, value] of Object.entries(values)) {
+        if (!value) {
+          invalid = true;
+          form.elements[name].setAttribute("aria-invalid", "true");
+        } else form.elements[name].removeAttribute("aria-invalid");
+      }
+      if (invalid) {
+        $("#register-error").textContent =
+          "请补全物品名称、拾获地点和描述，不能只填写空格。";
+        $("#register-error").hidden = false;
+        form.querySelector("[aria-invalid=true]").focus();
+        return;
+      }
+      store.update((s) =>
+        s.registrations.push({
+          id: "local-" + Date.now(),
+          ...values,
           type: "其他",
           date: "本机登记",
         }),
@@ -773,52 +967,150 @@
     e.preventDefault();
     $("#ending").close();
   });
-  window.addEventListener("storage", (e) => {
-    if (e.key !== store.key) return;
-    if (document.body.classList.contains("notebook-mode")) renderMine();
-    else {
-      renderResults($("#search").value);
+  function refreshSharedState() {
+    if (
+      history.state?.zhaohui === 1 &&
+      (history.state.runToken || "initial") !== store.read().runToken
+    ) {
+      restoreNavigation();
+      return;
+    }
+    if (store.read().ending && pendingChoice) {
+      $("#modal").close();
+      pendingChoice = null;
+      toast("本轮已在其他窗口结束，已更新为当前记录。");
+    }
+    syncAssist();
+    if (store.read().ending) {
+      motion.cancelTree($("#suggestions"));
+      $("#suggestions").hidden = true;
+    }
+    if (store.read().ending || !store.read().settings.assist) clearMatch();
+    if (document.body.classList.contains("notebook-mode")) {
+      const input = $("#notebook-search"),
+        editing = document.activeElement === input,
+        draft = input?.value,
+        start = input?.selectionStart,
+        end = input?.selectionEnd;
+      renderMine();
+      if (editing) {
+        const restored = $("#notebook-search");
+        restored.value = draft;
+        restored.focus({ preventScroll: true });
+        restored.setSelectionRange(start, end);
+      }
+    } else {
+      renderResults(displayedQuery);
       updateChrome();
     }
+  }
+  window.addEventListener("storage", (e) => {
+    if (e.key === store.key) refreshSharedState();
   });
   $("#modal").addEventListener("close", () => {
+    motion.cancelTree($("#modal-body"));
+    const item = $("#modal-body").dataset.foundItem;
+    if (item && document.body.classList.contains("notebook-mode"))
+      document.querySelector(`[data-inspect-found="${item}"]`)?.focus({ preventScroll: true });
     pendingChoice = null;
   });
-  const savedQuery = store.read().lastQuery;
-  home({ remember: false });
+  const startupState = history.state;
+  const expiredNavigation =
+    startupState?.zhaohui === 1 &&
+    (startupState.runToken || "initial") !== store.read().runToken;
+  if (expiredNavigation) history.replaceState(null, "", "#home");
+  const savedQuery = expiredNavigation
+    ? ""
+    : startupState?.zhaohui === 1 && startupState.hash === location.hash
+      ? String(startupState.query || "").slice(0, 80)
+      : store.read().lastQuery;
+  home({ remember: false, syncUrl: false });
   syncAssist();
   if (savedQuery)
-    search(savedQuery, { record: !store.read().searchHistory.length });
+    search(savedQuery, {
+      record: !store.read().searchHistory.length,
+      syncUrl: false,
+      respond: false,
+    });
   function navigateToHash(hash) {
     if ($("#modal").open) $("#modal").close();
     if (hash === "#mine") {
-      renderMine();
+      renderMine({ animate: true });
       $("#results-title").scrollIntoView?.({ block: "start" });
       return;
     }
     if (hash === "#application") {
       document.body.classList.remove("notebook-mode");
-      renderResults($("#search").value);
+      renderResults(displayedQuery);
       updateChrome();
       if (!$("#application-panel").hidden) {
         $("#application-panel").scrollIntoView?.({ block: "start" });
-        whisper();
+        if (store.read().flags.includes("verified")) whisper();
       }
+      return;
+    }
+    if (hash === "#home" || hash === "#all") {
+      home({ section: hash === "#all" ? "all" : "home", syncUrl: false });
       return;
     }
     if (hash === "#search" || !hash) {
       document.body.classList.remove("notebook-mode");
       const query = $("#search").value;
-      if (query) search(query, { record: false });
-      else home({ remember: false });
+      if (query) search(query, { record: false, syncUrl: false, respond: false });
+      else home({ remember: false, syncUrl: false });
       if (hash) {
         $(".search-section").scrollIntoView?.({ block: "start" });
         $("#search").focus({ preventScroll: true });
       }
     }
   }
-  window.addEventListener("hashchange", () => navigateToHash(location.hash));
-  if (!store.read().introduced) $("#intro").showModal();
-  if (["#mine", "#application", "#search"].includes(location.hash))
+  function restoreNavigation() {
+    const snapshot = history.state;
+    if (
+      snapshot?.zhaohui === 1 &&
+      (snapshot.runToken || "initial") !== store.read().runToken
+    ) {
+      document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+      claimDraft = "";
+      $("#application-panel")?.remove();
+      home({ remember: false, syncUrl: false });
+      commitView("#home", { replace: true });
+      if (!store.read().introduced) $("#intro").showModal();
+      return;
+    }
+    if (navigationStamp === stampNavigation()) return;
+    navigationStamp = stampNavigation();
+    const saved = history.state;
+    if (saved?.zhaohui === 1 && saved.hash === location.hash) {
+      $("#search").value = String(saved.query || "").slice(0, 80);
+      if (location.hash === "#search") {
+        const queries = store.read().searchHistory,
+          query = $("#search").value;
+        const cursor =
+          queries[saved.cursor] === query
+            ? saved.cursor
+            : queries.lastIndexOf(query);
+        store.update((s) => (s.searchCursor = cursor));
+      }
+    }
     navigateToHash(location.hash);
+  }
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) {
+      restoreNavigation();
+      refreshSharedState();
+    }
+  });
+  window.addEventListener("popstate", restoreNavigation);
+  window.addEventListener("hashchange", restoreNavigation);
+  if (!store.read().introduced) $("#intro").showModal();
+  if (
+    ["#mine", "#application", "#search", "#home", "#all"].includes(
+      location.hash,
+    )
+  )
+    navigateToHash(location.hash);
+  commitView(location.hash || ($("#search").value ? "#search" : "#home"), {
+    replace: true,
+  });
 })();

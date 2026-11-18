@@ -38,7 +38,8 @@
       store = w.ZHAOHUI_JOURNEY,
       data = w.ZHAOHUI,
       files = data.files,
-      index = w.ZHAOHUI_SEARCH;
+      index = w.ZHAOHUI_SEARCH,
+      motion = w.ZHAOHUI_MOTION;
     const esc = (v) =>
       String(v ?? "").replace(
         /[&<>"']/g,
@@ -57,6 +58,8 @@
       try {
         return (
           w.sessionStorage.getItem("harrow-session") === "danny-private-v3" &&
+          (w.sessionStorage.getItem("harrow-run-token") || "initial") ===
+            store.read().runToken &&
           flag("staff")
         );
       } catch {
@@ -67,12 +70,24 @@
       pair = store.read().danny.pair.slice(),
       transitionTimer = null,
       composing = false,
-      lastReadKey = "";
-    const status = (text) => ($("#site-status").textContent = text);
+      lastReadKey = "",
+      returnAfterLogin = null,
+      observedProgress = "",
+      toolDrafts = {},
+      observedRun = store.read().runToken;
+    const status = (text) => {
+      $("#site-status").textContent = text;
+      motion.feedback($("#site-status"));
+    };
+    function fieldStatus(selector, text, kind = "error") {
+      $(selector).textContent = text;
+      motion.feedback($(selector), kind);
+    }
     const canRead = (key) => {
       const f = files[key];
       return (
         !!f?.tab &&
+        (key !== "return-note" || store.read().belongings.returned) &&
         (f.access === "guest" ||
           (staff() &&
             ((f.access === "staff" &&
@@ -82,12 +97,54 @@
                 (key !== "clause" || flag("compared"))))))
       );
     };
+    const restarting = () =>
+      store.read().runToken !== "initial" && !store.read().introduced;
+    function adoptRun() {
+      const state = store.read();
+      if (state.runToken === observedRun) return false;
+      observedRun = state.runToken;
+      try {
+        w.sessionStorage.removeItem("harrow-session");
+        w.sessionStorage.removeItem("harrow-run-token");
+      } catch {}
+      toolDrafts = {};
+      pair = state.danny.pair.slice();
+      returnAfterLogin = null;
+      $("#site-search").value = state.danny.query;
+      w.clearTimeout(transitionTimer);
+      $("#archive-transition").hidden = true;
+      if ($("#restart-dialog").open) $("#restart-dialog").close();
+      return true;
+    }
+    function startGate() {
+      adoptRun();
+      chrome();
+      $("#site-main").classList.remove("split-reading");
+      motion.cancelTree($("#site-main"));
+      $("#site-main").innerHTML =
+        '<h2>本轮调查尚未开始</h2><p>注销已完成。请先回找回网的开场引导，开始新一轮调查。</p><a class="restart-entry" href="index.html#home">从开场重新开始 &gt;&gt;</a>';
+    }
     const available = () =>
       Object.entries(files)
         .filter(([key]) => canRead(key) && key !== "door-back")
         .map(([key, f]) => ({ ...f, key }));
-    function chrome() {
+    function progressSignature() {
+      return String(store.read().belongings.returned) + ":" + (staff()
+        ? ["cabinet", "compared", "timeline", "verified"].map(flag).join("|")
+        : "guest:" + String(store.read().introduced));
+    }
+    function refreshReadMarkers() {
+      d.querySelectorAll(".entry-list [data-read]").forEach((b) => {
+        const seen = has(files[b.dataset.read].id),
+          row = b.closest("article");
+        row.classList.toggle("is-read", seen);
+        row.querySelector(".read-marker").hidden = !seen;
+      });
+    }
+    function chrome({ reading = false } = {}) {
       const logged = staff();
+      motion.sync();
+      observedProgress = progressSignature();
       let guide = $("#journey-guide");
       if (!guide) {
         guide = d.createElement("section");
@@ -99,6 +156,7 @@
       w.ZHAOHUI_GUIDE.render(guide, store.read(), {
         page: "danny",
         staffSession: logged,
+        reading,
       });
       $("#permission-label").textContent = logged
         ? "员工模式 / Danny"
@@ -119,8 +177,45 @@
         else a.removeAttribute("aria-current");
       });
     }
+    function zoomImage(viewer, requested) {
+      const scale = Math.max(1, Math.min(3, requested));
+      const previous = Number(viewer.dataset.scale) || 1;
+      if (scale === previous) return;
+      const viewport = viewer.querySelector(".image-viewport");
+      const img = viewer.querySelector("img");
+      motion.cancel(viewport);
+      const before = img.getBoundingClientRect();
+      const box = viewport.getBoundingClientRect();
+      const centerX = box.left + viewport.clientWidth / 2;
+      const centerY = box.top + viewport.clientHeight / 2;
+      const fraction = (value, start, size) =>
+        size ? Math.max(0, Math.min(1, (value - start) / size)) : 0.5;
+      const x = fraction(centerX, before.left, before.width);
+      const y = fraction(centerY, before.top, before.height);
+      motion.cancel(img);
+      viewer.dataset.scale = scale;
+      img.style.width = scale * 100 + "%";
+      img.style.maxWidth = "none";
+      const after = img.getBoundingClientRect();
+      viewport.scrollLeft = Math.max(0, Math.min(
+        viewport.scrollWidth - viewport.clientWidth,
+        viewport.scrollLeft + after.left + x * after.width - centerX,
+      ));
+      viewport.scrollTop = Math.max(0, Math.min(
+        viewport.scrollHeight - viewport.clientHeight,
+        viewport.scrollTop + after.top + y * after.height - centerY,
+      ));
+      viewer.querySelector(".zoom-level").textContent = scale * 100 + "%";
+      viewer.querySelector('[data-zoom="-1"]').disabled = scale === 1;
+      viewer.querySelector('[data-zoom="1"]').disabled = scale === 3;
+      viewer.querySelector('[data-zoom-fit]').disabled = scale === 1;
+      motion.zoom(img,
+        before.width && after.width ? before.width / after.width : previous / scale, x, y);
+      if (d.activeElement?.disabled && viewer.contains(d.activeElement))
+        viewport.focus({ preventScroll: true });
+    }
     const body = (f) =>
-      `${f.fields?.length ? `<dl class="record-fields">${f.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${f.image ? `<div class="image-viewer"><div class="image-tools"><span>扫描附件</span><button type="button" data-zoom="-1" aria-label="缩小图片">－</button><span class="zoom-level">100%</span><button type="button" data-zoom="1" aria-label="放大图片">＋</button><a href="${esc(f.image)}" target="_blank" rel="noopener">原图 ↗</a></div><div class="image-viewport"><a class="image-link" href="${esc(f.image)}" target="_blank" rel="noopener"><img src="${esc(f.image)}" alt="${esc(f.title)}"></a></div></div>` : ""}<div class="entry-prose">${(f.body || []).map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
+      `${f.fields?.length ? `<dl class="record-fields">${f.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${f.image ? `<div class="image-viewer"><div class="image-tools"><span>扫描附件</span><button type="button" data-zoom="-1" aria-label="缩小图片" disabled>－</button><span class="zoom-level" aria-live="polite">100%</span><button type="button" data-zoom="1" aria-label="放大图片">＋</button><button type="button" data-zoom-fit disabled>适合</button><a href="${esc(f.image)}" target="_blank" rel="noopener">原图 ↗</a></div><div class="image-viewport" tabindex="0" role="region" aria-label="扫描图片，可用加减号缩放，0 恢复适合大小"><a class="image-link" href="${esc(f.image)}" target="_blank" rel="noopener"><img src="${esc(f.image)}" alt="${esc(f.title)}"></a></div></div>` : ""}<div class="entry-prose">${(f.body || []).map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
     function listing(entries) {
       return entries.length
         ? `<div class="entry-list">${entries.map((f) => `<article class="${has(f.id) ? "is-read" : ""}"><span class="entry-date">${esc(f.date || "旧存档")} · ${esc(f.author || "Danny")} · ${esc(f.kind === "image" ? "相片" : "文字")}<span class="read-marker" ${has(f.id) ? "" : "hidden"}>已读</span></span><h3><button data-read="${esc(f.key)}">${esc(f.title)}</button></h3><p>${esc(f.summary)}</p></article>`).join("")}</div>`
@@ -130,11 +225,19 @@
       return '<article id="reading-pane" class="reading-pane" tabindex="-1" hidden></article>';
     }
     function read(key, { remember = true, focus = true } = {}) {
+      if (restarting()) {
+        startGate();
+        return;
+      }
       if (!canRead(key)) {
         status("此材料尚不在当前可查阅范围。");
         return;
       }
       const f = files[key];
+      const turning =
+        ["door-front", "door-back"].includes(key) &&
+        ["door-front", "door-back"].includes(lastReadKey) &&
+        lastReadKey !== key;
       lastReadKey = key;
       if (!$("#reading-pane"))
         $("#site-main").insertAdjacentHTML("beforeend", reader());
@@ -144,6 +247,7 @@
         "split-reading",
         ["journal", "photos", "guestbook", "search"].includes(active),
       );
+      motion.cancelTree(pane);
       pane.innerHTML = `<div class="reading-head"><span>${esc(f.source)}</span><button id="close-reading">收起</button></div><h2>${esc(f.title)}</h2>${body(f)}${["door-front", "door-back"].includes(key) ? `<button data-read="${key === "door-front" ? "door-back" : "door-front"}" class="flip-photo">${key === "door-front" ? "翻到背面" : "翻回正面"}</button>` : ""}${key === "intake" ? '<p><a href="index.html#application">原登记系统 / 人员申请附件</a></p>' : ""}<p class="save-note">本份材料已保存在“我的”。</p>`;
       store.collect({ ...f, url: "danny.html#" + f.tab + "--" + f.id });
       const row = d
@@ -161,21 +265,27 @@
       w.ZHAOHUI_GUIDE.render($("#journey-guide"), store.read(), {
         page: "danny",
         staffSession: staff(),
+        reading: true,
       });
       status("已保存：" + f.title);
+      if (focus) {
+        if (turning) motion.flip(pane.querySelector(".image-viewport"));
+        else motion.enter(pane);
+      }
       if (focus) {
         pane.focus({ preventScroll: true });
         pane.scrollIntoView?.({ block: "nearest" });
       }
     }
     function account() {
-      return `<h2>个人站账户</h2>${staff() ? '<p>已建立员工会话。公开随记仍可照常浏览，馆务镜像保存在工作匣。</p><a href="#work" data-tab="work">打开工作匣</a>' : `<p>游客可以阅读公开随记、相册和旧留言。工作匣沿用馆务员工账户。</p><form id="login-form"><label>员工账号<input name="account" required maxlength="60" autocomplete="off" spellcheck="false"></label><label>口令<input name="password" type="password" required maxlength="60" autocomplete="off"></label><button>建立员工会话</button></form><p id="login-status" role="status"></p><details class="personal-reminder"><summary>本人留存的口令备忘</summary><p>四行雨的开头，接第一次正式开门的那天。字母小写，日期只留月日四位，连着写。</p><p class="fine">照片背面别丢了。工牌上的数字已经不用。</p></details>`}<label class="check"><input id="reduced-effects" type="checkbox" ${store.read().settings.reduced ? "checked" : ""}> 减少页面突变效果</label><p class="fine">虚构账号谜题，请勿输入现实账号或口令。员工会话仅保留在当前浏览器标签页。</p>`;
+      return `<h2>个人站账户</h2>${staff() ? '<p>已建立员工会话。公开随记仍可照常浏览，馆务镜像保存在工作匣。</p><a href="#work" data-tab="work">打开工作匣</a>' : `<p>游客可以阅读公开随记、相册和旧留言。工作匣沿用馆务员工账户。</p><form id="login-form"><label>员工账号<input name="account" required maxlength="60" autocomplete="off" spellcheck="false"></label><label>口令<input name="password" type="password" required maxlength="60" autocomplete="off"></label><button>建立员工会话</button></form><p id="login-status" role="status"></p><details class="personal-reminder"><summary>本人留存的口令备忘</summary><p>四行雨的开头，接第一次正式开门的那天。字母小写，日期只留月日四位，连着写。</p><p class="fine">照片背面别丢了。工牌上的数字已经不用。</p></details>`}<label class="check"><input id="reduced-effects" type="checkbox" ${store.read().settings.reduced ? "checked" : ""}> 减少动态与突变效果</label><p class="fine">虚构账号谜题，请勿输入现实账号或口令。员工会话仅保留在当前浏览器标签页。</p>`;
     }
     function timelineTool() {
       const saved = store.read().danny;
       return `<section class="timeline-tool"><div class="tool-heading"><span>LOG REPAIR / 2019.11.03</span><h3>校订值勤流水</h3></div><p>会话包未能自动合并。请按当班实际发生的先后重新编排，取消不属于这一天的记录。时间需以馆钟统一。</p><ol id="timeline-events">${saved.timeline.map((id, i) => `<li draggable="true" data-event="${id}"><span class="event-grip" aria-hidden="true">⠿</span><label><input type="checkbox" data-include="${id}" ${saved.included.includes(id) ? "checked" : ""}><span>${w.DANNY_TIMELINE.events.find((e) => e.id === id).label}</span></label><span class="event-controls"><button type="button" data-move="${id}" data-direction="-1" aria-label="上移记录" ${i === 0 ? "disabled" : ""}>↑</button><button type="button" data-move="${id}" data-direction="1" aria-label="下移记录" ${i === saved.timeline.length - 1 ? "disabled" : ""}>↓</button></span></li>`).join("")}</ol><button type="button" id="check-timeline">${flag("timeline") ? "重新核对排列" : "校订并合并会话包"}</button><p id="timeline-status" role="status">${flag("timeline") ? "会话包已恢复，正文保存在工作匣中。" : ""}</p>${flag("timeline") ? '<button data-read="conversation">打开修复的查询会话</button>' : ""}</section>`;
     }
     function moveEvent(id, beforeId, delta) {
+      const positions = motion.capture($("#timeline-events"));
       store.update((state) => {
         const order = state.danny.timeline,
           from = order.indexOf(id);
@@ -186,7 +296,8 @@
         order.splice(to, 0, id);
       });
       route("work");
-      const button = d.querySelector('[data-move="' + id + '"]');
+      motion.reorder($("#timeline-events"), positions);
+      const button = d.querySelector('[data-move="' + id + '"]:not(:disabled)');
       button?.focus({ preventScroll: true });
     }
     function cabinetForm() {
@@ -209,7 +320,86 @@
           "",
         )}</fieldset><button>保存字段核对</button></form><p id="difference-status" role="status"></p>${flag("compared") ? '<button data-read="clause">查阅移交附则</button>' : ""}</section><section class="chain-box"><h3>附页关系登记</h3><p>签收凭据和后续登记之间有一处相同的人员标识。按原字段填写，不必写整句推测。</p><form id="chain-form"><label>签收凭据中的签收人<input name="signer" required maxlength="80" autocomplete="off"></label><label>后续登记中的物品名称<input name="subject" required maxlength="80" autocomplete="off"></label><label>特殊认领移交的事项<input name="inheritance" required maxlength="80" autocomplete="off"></label><button>核对关联</button></form><p id="chain-status" role="status"></p><div id="truth-result" ${flag("verified") ? "" : "hidden"}>${flag("verified") ? body(files.truth) + '<a href="index.html#application">返回找回网 / 待决定的申请</a>' : ""}</div></section>${reader()}`;
     }
-    function route(target) {
+    function toolElement(code) {
+      const selectors = {
+        catalog: ".entry-list",
+        account: "#login-form",
+        timeline: ".timeline-tool",
+        cabinet: ".cabinet-box",
+        compare: ".comparison-tool",
+        relation: ".chain-box",
+        reader: "#reading-pane",
+      };
+      return selectors[code] ? $(selectors[code]) : null;
+    }
+    function focusTool(code) {
+      const target = toolElement(code) || $("#site-main");
+      if (target) {
+        if (!target.matches("input,button,a,select,textarea"))
+          target.setAttribute("tabindex", "-1");
+        target.focus({ preventScroll: true });
+        target.scrollIntoView?.({ block: "start" });
+      }
+    }
+    function captureDrafts() {
+      if (!staff()) return;
+      for (const [id, names] of Object.entries({
+        "cabinet-form": ["code"],
+        "chain-form": ["signer", "subject", "inheritance"],
+      })) {
+        const form = $("#" + id);
+        if (form)
+          toolDrafts[id] = Object.fromEntries(
+            names.map((name) => [name, form.elements[name].value]),
+          );
+      }
+    }
+    function restoreDrafts() {
+      for (const [id, values] of Object.entries(toolDrafts)) {
+        const form = $("#" + id);
+        if (form)
+          for (const [name, value] of Object.entries(values))
+            form.elements[name].value = value;
+      }
+    }
+    function navigate(target) {
+      if (restarting()) {
+        startGate();
+        return;
+      }
+      const [section, entry] = target.split("--");
+      if (section === active) {
+        if (entry?.startsWith("tool-") && toolElement(entry.slice(5))) {
+          focusTool(entry.slice(5));
+          return;
+        }
+        const key = Object.keys(files).find((key) => files[key].id === entry);
+        if (key && canRead(key) && $(".entry-list")) {
+          read(key, { remember: false });
+          return;
+        }
+        if (!entry && $(".entry-list")) {
+          if ($("#reading-pane")) $("#reading-pane").hidden = true;
+          $("#site-main").classList.remove("split-reading");
+          focusTool("catalog");
+          return;
+        }
+      }
+      route(target, { animate: true });
+    }
+    function route(target, { focusEntry = true, animate = false } = {}) {
+      adoptRun();
+      if (restarting()) {
+        toolDrafts = {};
+        returnAfterLogin = null;
+        startGate();
+        return;
+      }
+      if (!has("trace")) {
+        store.collect(files.trace);
+        store.mark("trace");
+      }
+      captureDrafts();
       const [tab, entryId] = String(target).split("--");
       active = [
         "journal",
@@ -250,20 +440,37 @@
           `<h2>${{ journal: "随记", photos: "相册", guestbook: "留言簿" }[active]}</h2><p class="fine">${{ journal: "有些日子只写了两句。", photos: "相纸、票据和旧物，按扫描顺序放着。", guestbook: "旧站迁移留下的留言。新留言已关闭。" }[active]}</p>` +
           listing(available().filter((f) => f.tab === active)) +
           reader();
+      motion.cancelTree($("#site-main"));
       $("#site-main").innerHTML = html;
+      restoreDrafts();
+      if (animate)
+        motion.enter($("#site-main"), { items: ".entry-list>article" });
       if (active === "archive" && staff() && flag("cabinet")) {
         renderPair();
         transition();
       }
-      if (entryId) {
+      if (
+        entryId &&
+        /^tool-(timeline|cabinet|compare|relation)$/.test(entryId)
+      ) {
+        if (!staff()) returnAfterLogin = active + "--" + entryId;
+        if (focusEntry) focusTool(entryId.slice(5));
+      } else if (entryId) {
         const key = Object.keys(files).find((key) => files[key].id === entryId);
-        if (key) read(key, { remember: false, focus: false });
+        if (key && !canRead(key) && !staff() && files[key].access !== "guest")
+          returnAfterLogin = active + "--" + entryId;
+        if (key) read(key, { remember: false, focus: focusEntry });
       }
     }
     function go(tab) {
-      if (w.location.hash !== "#" + tab)
-        w.history.pushState(null, "", "#" + tab);
-      route(tab);
+      if (w.location.hash === "#" + tab) return;
+      const [section, entry] = tab.split("--");
+      const localTool =
+        section === active &&
+        entry?.startsWith("tool-") &&
+        toolElement(entry.slice(5));
+      w.history.pushState(null, "", "#" + tab);
+      if (!localTool) navigate(tab);
     }
     function renderPair() {
       for (let i = 0; i < 2; i++) {
@@ -272,10 +479,18 @@
           node = $("#compare-doc-" + side);
         if (!node) continue;
         if (key && canRead(key)) {
+          if (node.dataset.fileKey === key) continue;
+          motion.cancelTree(node);
           node.innerHTML =
             "<h4>" + esc(files[key].title) + "</h4>" + body(files[key]);
+          node.dataset.fileKey = key;
           store.collect(files[key]);
-        } else node.replaceChildren();
+          motion.enter(node);
+        } else {
+          motion.cancelTree(node);
+          node.replaceChildren();
+          delete node.dataset.fileKey;
+        }
       }
     }
     function transition() {
@@ -297,33 +512,52 @@
     d.addEventListener("click", (e) => {
       const b = e.target.closest("button,a");
       if (!b) return;
+      if (b.id === "restart-game") $("#restart-dialog").showModal();
+      if (b.id === "cancel-restart" || b.id === "keep-playing")
+        $("#restart-dialog").close();
+      if (b.id === "confirm-restart") {
+        motion.cancelAll();
+        store.reset();
+        try {
+          w.sessionStorage.removeItem("harrow-session");
+          w.sessionStorage.removeItem("harrow-run-token");
+        } catch {}
+        toolDrafts = {};
+        pair = ["", ""];
+        returnAfterLogin = null;
+        w.clearTimeout(transitionTimer);
+        $("#archive-transition").hidden = true;
+        $("#restart-dialog").close();
+        startGate();
+        return;
+      }
+      const local =
+        b.tagName === "A" &&
+        /^danny\.html#([a-z0-9-]+)$/.exec(b.getAttribute("href") || "");
+      if (local && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        go(local[1]);
+        focusTool(b.dataset.guideFocus);
+      }
       if (b.dataset.tab) {
         e.preventDefault();
         go(b.dataset.tab);
       }
       if (b.dataset.read) read(b.dataset.read);
-      if (b.dataset.zoom) {
-        const viewer = b.closest(".image-viewer"),
-          img = viewer.querySelector("img");
-        const scale = Math.max(
-          1,
-          Math.min(
-            3,
-            (Number(viewer.dataset.scale) || 1) + Number(b.dataset.zoom) * 0.5,
-          ),
-        );
-        viewer.dataset.scale = scale;
-        img.style.width = scale * 100 + "%";
-        img.style.maxWidth = "none";
-        viewer.querySelector(".zoom-level").textContent = scale * 100 + "%";
+      if (b.dataset.zoom || b.hasAttribute("data-zoom-fit")) {
+        const viewer = b.closest(".image-viewer");
+        zoomImage(viewer, b.hasAttribute("data-zoom-fit") ? 1 :
+          (Number(viewer.dataset.scale) || 1) + Number(b.dataset.zoom) * 0.5);
       }
       if (b.dataset.move && staff())
         moveEvent(b.dataset.move, null, Number(b.dataset.direction));
       if (b.id === "check-timeline" && staff()) {
         const saved = store.read().danny;
         if (!w.DANNY_TIMELINE.check(saved.timeline, saved.included)) {
-          $("#timeline-status").textContent =
-            "当前排列不能合并。请核对记录所属日期，以及两种钟表之间的偏差。";
+          fieldStatus(
+            "#timeline-status",
+            "当前排列不能合并。请核对记录所属日期，以及两种钟表之间的偏差。",
+          );
           return;
         }
         store.mark("timeline");
@@ -331,20 +565,24 @@
         status("值勤流水校订完成，查询会话已恢复。");
       }
       if (b.id === "close-reading") {
+        motion.cancelTree($("#reading-pane"));
         $("#reading-pane").hidden = true;
         $("#site-main").classList.remove("split-reading");
         w.history.replaceState(null, "", "#" + active);
         const origin =
-          d.querySelector('.entry-list [data-read="' + lastReadKey + '"]') ||
+          d.querySelector('.entry-list [data-read="' + (lastReadKey === "door-back" ? "door-front" : lastReadKey) + '"]') ||
           $("#site-main");
+        motion.feedback(origin);
         origin.focus({ preventScroll: true });
         origin.scrollIntoView?.({ block: "nearest" });
       }
       if (b.id === "logout") {
         try {
           w.sessionStorage.removeItem("harrow-session");
+          w.sessionStorage.removeItem("harrow-run-token");
         } catch {}
         pair = ["", ""];
+        toolDrafts = {};
         w.clearTimeout(transitionTimer);
         $("#archive-transition").hidden = true;
         route("journal");
@@ -352,15 +590,32 @@
         status("已退出员工模式。");
       }
     });
+    d.addEventListener("keydown", (e) => {
+      const viewport = e.target.closest(".image-viewport");
+      if (!viewport || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!["+", "=", "-", "0"].includes(e.key)) return;
+      e.preventDefault();
+      const viewer = viewport.closest(".image-viewer");
+      zoomImage(viewer, e.key === "0" ? 1 :
+        (Number(viewer.dataset.scale) || 1) + (e.key === "-" ? -0.5 : 0.5));
+    });
     let dragged = null;
     d.addEventListener("dragstart", (e) => {
       const row = e.target.closest("[data-event]");
       if (!row || !staff()) return;
       dragged = row.dataset.event;
+      row.classList.add("is-dragging");
       e.dataTransfer?.setData("text/plain", dragged);
     });
     d.addEventListener("dragover", (e) => {
-      if (dragged && e.target.closest("[data-event]")) e.preventDefault();
+      const row = e.target.closest("[data-event]");
+      if (dragged && row) {
+        e.preventDefault();
+        d.querySelectorAll(".is-drop-target").forEach((n) =>
+          n.classList.remove("is-drop-target"),
+        );
+        if (row.dataset.event !== dragged) row.classList.add("is-drop-target");
+      }
     });
     d.addEventListener("drop", (e) => {
       const row = e.target.closest("[data-event]");
@@ -369,7 +624,12 @@
       moveEvent(dragged, row.dataset.event, 0);
       dragged = null;
     });
-    d.addEventListener("dragend", () => (dragged = null));
+    d.addEventListener("dragend", () => {
+      dragged = null;
+      d.querySelectorAll(".is-dragging,.is-drop-target").forEach((n) =>
+        n.classList.remove("is-dragging", "is-drop-target"),
+      );
+    });
     d.addEventListener("change", (e) => {
       if (e.target.dataset.include && staff()) {
         store.update((s) => {
@@ -382,6 +642,7 @@
       }
       if (e.target.id === "reduced-effects") {
         store.update((s) => (s.settings.reduced = e.target.checked));
+        motion.sync();
         if (e.target.checked) $("#archive-transition").hidden = true;
       }
       if (e.target.id === "compare-left" || e.target.id === "compare-right") {
@@ -405,31 +666,50 @@
         if (
           !checkCredentials(f.elements.account.value, f.elements.password.value)
         ) {
-          $("#login-status").textContent =
-            "凭证不匹配。旧记录可能已经失效，可以回看公开材料。";
+          fieldStatus(
+            "#login-status",
+            "凭证不匹配。旧记录可能已经失效，可以回看公开材料。",
+          );
           return;
         }
         try {
           w.sessionStorage.setItem("harrow-session", "danny-private-v3");
-          if (w.sessionStorage.getItem("harrow-session") !== "danny-private-v3")
+          w.sessionStorage.setItem("harrow-run-token", store.read().runToken);
+          if (
+            w.sessionStorage.getItem("harrow-session") !== "danny-private-v3" ||
+            w.sessionStorage.getItem("harrow-run-token") !==
+              store.read().runToken
+          )
             throw Error("session");
         } catch {
-          $("#login-status").textContent =
-            "无法建立本机会话，请允许会话存储后重试。";
+          try {
+            w.sessionStorage.removeItem("harrow-session");
+            w.sessionStorage.removeItem("harrow-run-token");
+          } catch {}
+          fieldStatus(
+            "#login-status",
+            "无法建立本机会话，请允许会话存储后重试。",
+          );
           return;
         }
         f.elements.password.value = "";
         store.mark("staff");
         store.collect({ ...files.staff, url: "danny.html#work" });
-        go("work");
-        status("员工会话已建立。工作匣现可查阅。");
+        let destination = returnAfterLogin || "work";
+        returnAfterLogin = null;
+        if (destination.startsWith("archive") && !flag("cabinet"))
+          destination = "work";
+        go(destination);
+        status("员工会话已建立，已回到可查阅的位置。");
       }
       if (f.id === "cabinet-form") {
         e.preventDefault();
         if (!staff()) return;
         if (f.elements.code.value.trim() !== "5003") {
-          $("#cabinet-status").textContent =
-            "未找到这一批旧档。请核对图纸年代、适用范围和柜号制度。";
+          fieldStatus(
+            "#cabinet-status",
+            "未找到这一批旧档。请核对图纸年代、适用范围和柜号制度。",
+          );
           return;
         }
         store.mark("cabinet");
@@ -443,13 +723,17 @@
           (x) => x.value,
         );
         if (!checkPair(...pair)) {
-          $("#difference-status").textContent =
-            "所选两份材料不是同一事件的原件与移交副本。请先核对姓名、项目和材料用途。";
+          fieldStatus(
+            "#difference-status",
+            "所选两份材料不是同一事件的原件与移交副本。请先核对姓名、项目和材料用途。",
+          );
           return;
         }
         if (!checkDifferences(values)) {
-          $("#difference-status").textContent =
-            "字段标记与所选材料不一致。相同字段无需标记。";
+          fieldStatus(
+            "#difference-status",
+            "字段标记与所选材料不一致。相同字段无需标记。",
+          );
           return;
         }
         store.mark("compared");
@@ -464,8 +748,10 @@
           !flag("timeline") ||
           !["signed", "relist", "clause", "conversation"].every(has)
         ) {
-          $("#chain-status").textContent =
-            "原始材料尚未核对完整。请读凭据、后续登记、移交附则，以及校订后恢复的会话。";
+          fieldStatus(
+            "#chain-status",
+            "原始材料尚未核对完整。请读凭据、后续登记、移交附则，以及校订后恢复的会话。",
+          );
           return;
         }
         if (
@@ -475,7 +761,7 @@
             f.elements.inheritance.value,
           )
         ) {
-          $("#chain-status").textContent = "关联尚未成立，请以原件字段为准。";
+          fieldStatus("#chain-status", "关联尚未成立，请以原件字段为准。");
           return;
         }
         store.mark("verified");
@@ -492,22 +778,40 @@
       "compositionend",
       () => (composing = false),
     );
+    w.addEventListener("pageshow", (e) => {
+      if (e.persisted) {
+        if (!staff()) toolDrafts = {};
+        route(w.location.hash.slice(1) || "journal", { focusEntry: false });
+      }
+    });
     w.addEventListener("hashchange", () => {
-      route(w.location.hash.slice(1));
+      navigate(w.location.hash.slice(1));
     });
     w.addEventListener("storage", (e) => {
       if (e.key === store.key) {
+        const newRun = adoptRun();
         if (!flag("staff")) {
+          toolDrafts = {};
           try {
             w.sessionStorage.removeItem("harrow-session");
+            w.sessionStorage.removeItem("harrow-run-token");
           } catch {}
         }
-        route(w.location.hash.slice(1) || active);
+        if (newRun || progressSignature() !== observedProgress)
+          route(w.location.hash.slice(1) || active, { focusEntry: false });
+        else {
+          chrome({
+            reading: !!$("#reading-pane") && !$("#reading-pane").hidden,
+          });
+          refreshReadMarkers();
+        }
       }
     });
     $("#site-search").value = store.read().danny.query;
-    store.collect(files.trace);
-    store.mark("trace");
+    if (!restarting()) {
+      store.collect(files.trace);
+      store.mark("trace");
+    }
     route(w.location.hash.slice(1) || "journal");
   }
   return {

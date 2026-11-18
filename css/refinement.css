@@ -2085,3 +2085,284 @@ body > .utility {
     font-size: 10px;
   }
 }
+/* 阅读时保留目标标题和主入口，说明可折叠；两条调查线各有可操作入口。 */
+.journey-caption > [data-guide-toggle] {
+  font:
+    11px/1.6 Tahoma,
+    "SimSun",
+    serif;
+  border: 0;
+  padding: 0 0 3px;
+  color: #8196a4;
+  background: transparent;
+  box-shadow: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.journey-guide.is-compact {
+  padding-block: 12px;
+}
+.journey-guide.is-compact .journey-content {
+  align-items: center;
+}
+.journey-guide.is-compact .journey-content h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.journey-guide.is-compact .journey-content p,
+.journey-guide.is-compact .journey-tasks,
+.journey-guide.is-compact .journey-path {
+  display: none;
+}
+.journey-tasks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+.journey-tasks li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  gap: 5px 7px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #d6dfe4;
+  background: #ffffff60;
+  align-items: baseline;
+  min-width: 0;
+}
+.journey-tasks li > span:nth-child(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.journey-tasks small {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.journey-task-link {
+  grid-column: 2/-1;
+  justify-self: start;
+  font-size: 11px;
+  line-height: 1.8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding-block: 3px;
+  overflow-wrap: anywhere;
+}
+.site .journey-caption > [data-guide-toggle] {
+  color: #8a997a;
+  background: transparent;
+  box-shadow: none;
+}
+.site .journey-tasks li {
+  border-color: #d1dac5;
+  background: #f7f8ef;
+}
+.site .journey-task-link {
+  color: #758969;
+}
+@media (max-width: 960px) {
+  .journey-tasks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .journey-guide.is-compact .journey-content {
+    gap: 9px;
+  }
+  .journey-guide.is-compact .journey-actions {
+    gap: 7px 12px;
+  }
+  .journey-caption > [data-guide-toggle] {
+    min-height: 28px;
+  }
+  .journey-tasks li {
+    padding: 10px;
+  }
+  .journey-task-link {
+    min-height: 32px;
+  }
+}
+/* 注销明确表示重新开始，与仅退出员工会话分开。 */
+.nav.nav-restart {
+  margin-left: auto;
+  color: #e1e7eb;
+  font-size: 12px;
+  border-left: 1px solid #ffffff26;
+}
+.site-nav > .site-restart {
+  margin-left: auto;
+  min-height: 42px;
+  padding: 9px 18px;
+  border: 0;
+  border-left: 1px solid #bdc9b4;
+  background: transparent;
+  box-shadow: none;
+  color: #7f886f;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.site-nav > .site-restart:hover {
+  background: #e7ebdf;
+  color: #5d6c51;
+}
+.restart-dialog {
+  width: min(560px, calc(100% - 24px));
+  padding: 0;
+  border: 1px solid #a7b697;
+  background: #f6f7ee;
+  color: #57674d;
+}
+.restart-dialog .modal-head {
+  background: #e9eedd;
+  color: #6a7e59;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+}
+.restart-dialog .modal-head button {
+  border: 1px solid #b8c5a9;
+  background: #f7f8ee;
+  color: #708162;
+  font-size: 19px;
+}
+.reset-body {
+  padding: 22px 24px;
+}
+.reset-body h2 {
+  font:
+    21px/1.6 "Songti SC",
+    "SimSun",
+    serif;
+  margin: 0 0 15px;
+  color: #5d704f;
+}
+.reset-body p {
+  font-size: 13px;
+  line-height: 1.95;
+  color: #839076;
+}
+.reset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+.reset-actions > a {
+  display: inline-block;
+  border: 1px solid #b1c19f;
+  background: #e8efdb;
+  color: #627b4e;
+  padding: 9px 13px;
+  font-size: 12px;
+  text-decoration: none;
+}
+.reset-actions > button {
+  font-size: 12px;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: #8b997b;
+  cursor: pointer;
+}
+.restart-entry {
+  display: inline-block;
+  padding: 10px 14px;
+  border: 1px solid #b8c8a7;
+  background: #edf2e3;
+  margin-top: 14px;
+}
+@media (max-width: 760px) {
+  .nav.nav-restart {
+    padding-inline: 15px;
+  }
+  .site-nav > .site-restart {
+    padding-inline: 14px;
+  }
+  .reset-body {
+    padding: 20px;
+  }
+  .reset-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .reset-actions > a {
+    text-align: center;
+  }
+  .reset-actions > button {
+    min-height: 40px;
+  }
+}
+.top-strip > .site-restart {
+  flex: 0 0 auto;
+  font:
+    11px/1.6 Tahoma,
+    "SimSun",
+    serif;
+  letter-spacing: 0;
+  padding: 4px 10px;
+  min-height: 30px;
+  border: 1px solid #7e9484;
+  background: #43594e;
+  box-shadow: none;
+  color: #e1e8da;
+  cursor: pointer;
+}
+.top-strip > .site-restart:hover {
+  background: #536c5a;
+  color: white;
+}
+.top-strip {
+  align-items: center;
+  gap: 10px;
+}
+.top-strip > span {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.top-strip > a {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .nav.nav-restart {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: #2a628a;
+    flex: 0 0 auto;
+  }
+  .top-strip {
+    padding: 7px 12px;
+    letter-spacing: 1px;
+  }
+  .top-strip > .site-restart {
+    min-height: 32px;
+  }
+}
+
+/* 随身袋沿用旧门户的物品目录，不把物品交还混进人员申请。 */
+.found-pocket {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid #a7bac9;
+  background: #f3f6f8;
+}
+.found-pocket-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; }
+.found-pocket-head h3 { margin: 0; font-size: 16px; }
+.found-pocket-head > span, .found-object > span { font-size: 12px; color: #627784; }
+.found-pocket p { line-height: 1.8; }
+.found-pocket-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.found-object { min-width: 0; padding: 12px; background: #fff; border: 1px solid #bdcbd5; }
+.found-object h4 { margin: 8px 0; font-size: 14px; }
+.found-object p { font-size: 13px; }
+.found-object button { padding: 6px 10px; border: 1px solid #a4b8c8; background: #edf2f6; }
+.found-observation { border-top: 1px dotted #bdcbd5; padding-top: 8px; }
+.found-suggestion-link { display: block; padding: 10px 15px; color: #245d8e; text-decoration: underline; }
+.found-system-note { margin: 8px 15px; font-size: 12px; line-height: 1.8; color: #627784; }
+.found-receipt-link { margin-bottom: 0; text-decoration: underline; }
+@media (max-width: 760px) { .found-pocket-grid { grid-template-columns: 1fr; } }
+.suggestions > a.suggestion-response { display: block; text-decoration: underline; }

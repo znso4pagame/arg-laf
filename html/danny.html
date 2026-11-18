@@ -11,13 +11,23 @@
     <script defer src="../js/search-index.js"></script>
     <script defer src="../js/timeline.js"></script>
     <script defer src="../js/journey-guide.js"></script>
+    <script defer src="../js/motion.js"></script>
     <script defer src="../js/danny.js"></script>
     <link rel="stylesheet" href="../css/refinement.css" />
+    <link rel="stylesheet" href="../css/motion.css" />
   </head>
   <body>
     <div class="site">
       <div class="top-strip">
-        <span>PERSONAL WEB / SINCE 2006</span><a href="index.html">返回来处</a>
+        <span>PERSONAL WEB / SINCE 2006</span><a href="index.html">返回来处</a
+        ><button
+          type="button"
+          id="restart-game"
+          class="site-restart"
+          title="注销并清除本轮记录，从开场重新开始"
+        >
+          注销
+        </button>
       </div>
       <header class="masthead">
         <p>bluecoat's homepage</p>
@@ -93,6 +103,28 @@
         >需要启用 JavaScript 才能阅读存档、保存材料与切换权限。</noscript
       >
     </div>
+    <dialog
+      id="restart-dialog"
+      class="restart-dialog"
+      aria-labelledby="restart-title"
+    >
+      <div class="modal-head">
+        <span>注销并重新开始</span
+        ><button id="cancel-restart" type="button" aria-label="关闭注销确认">
+          ×
+        </button>
+      </div>
+      <div class="reset-body">
+        <h2 id="restart-title">注销并从头开始游戏？</h2>
+        <p>
+          本轮的进度、线索、笔记、登记和结局将被清除，员工登录也会退出。确认后回到找回网的开场引导。
+        </p>
+        <div class="reset-actions">
+          <a id="confirm-restart" href="index.html#home">确认注销并重新开始</a
+          ><button type="button" id="keep-playing">取消，继续本轮游戏</button>
+        </div>
+      </div>
+    </dialog>
     <div id="archive-transition" hidden aria-hidden="true">
       当前访问者未登记<br /><small>正在恢复旧记录……</small>
     </div>
