@@ -262,6 +262,23 @@
         date: "2019-11-02",
         keywords: ["雨", "英文", "窗"],
       },
+      "unresolved-7": {
+        id: "unresolved-7",
+        title: "未解决 #7：小鹿是谁？",
+        kind: "record",
+        source: "Danny 的个人网页 / 未解决问题",
+        summary: "我在寻回网的搜索建议里看到过一句话：“我是小鹿。”",
+        body: [
+          "我在寻回网的搜索建议里看到过一句话：“我是小鹿。”之后就再也没出现过。",
+          "我搜了好多词，她没有再说话。我不知道她是系统错误，还是别的什么东西。",
+          "又是什么bug吗？",
+        ],
+        url: "danny.html#journal--unresolved-7",
+        tab: "journal",
+        access: "guest",
+        date: "2019-11-03",
+        keywords: ["小鹿", "未解决", "寻回网", "搜索建议", "客服"],
+      },
       tea: {
         id: "tea",
         title: "自动售货机又吞了钱",
