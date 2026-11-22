@@ -928,6 +928,8 @@
     if (b.id === "confirm-reset") {
       motion.cancelAll();
       store.reset();
+      // achievement: 完整注销时重置成就与待显示通知
+      window.AchievementSystem?.reset();
       try {
         sessionStorage.removeItem("harrow-session");
         sessionStorage.removeItem("harrow-run-token");

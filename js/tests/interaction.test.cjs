@@ -2310,3 +2310,102 @@ test("成就：已展示完成的成就不会在换页或刷新后再次弹出",
   assert.equal(b.w.AchievementSystem.unlock("first-visit"), false);
   assert.deepEqual(Array.from(b.w.AchievementSystem.pending()), []);
 });
+
+test("成就：主站完整注销重置成就与待显示队列，取消注销则保留", (t) => {
+  const local = memory(), session = memory();
+  const a = boot(t, "index", local, session);
+  for (const id of ["first-search", "old-archive", "collector"])
+    assert.equal(a.w.AchievementSystem.unlock(id), true, id);
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), [
+    "first-visit",
+    "first-search",
+    "old-archive",
+    "collector",
+  ]);
+  a.click("#reset");
+  a.click("#cancel-choice");
+  assert.ok(a.w.AchievementSystem.isUnlocked("collector"));
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), [
+    "first-visit",
+    "first-search",
+    "old-archive",
+    "collector",
+  ]);
+  a.click("#reset");
+  a.click("#confirm-reset");
+  for (const id of ["first-visit", "first-search", "old-archive", "collector"])
+    assert.equal(a.w.AchievementSystem.isUnlocked(id), false, id);
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), []);
+  assert.equal(local.getItem("arg-laf-achievements-v1"), null);
+  assert.equal(local.getItem("arg-laf-achievements-v1:pending"), null);
+  assert.equal(a.d.querySelectorAll(".achievement-toast").length, 0);
+  a.tick();
+  a.tick();
+  assert.equal(a.d.querySelectorAll(".achievement-toast").length, 0);
+  const fresh = boot(t, "search", local, session);
+  assert.equal(fresh.d.querySelectorAll(".achievement-toast").length, 0);
+  assert.deepEqual(Array.from(fresh.w.AchievementSystem.pending()), []);
+  assert.equal(fresh.w.AchievementSystem.unlock("first-visit"), true);
+  assert.equal(fresh.$(".achievement-toast")?.dataset.achievement, "first-visit");
+});
+
+test("成就：Danny 完整注销重置成就与待显示队列，取消则保留", (t) => {
+  const local = memory(), session = memory();
+  const a = login(t, local, session);
+  for (const id of ["blue-marble", "old-cabinet", "final-sign"])
+    assert.equal(a.w.AchievementSystem.unlock(id), true, id);
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), [
+    "employee-pass",
+    "workbox",
+    "private-search",
+    "blue-marble",
+    "old-cabinet",
+    "final-sign",
+  ]);
+  a.click("#restart-game");
+  a.click("#keep-playing");
+  assert.ok(a.w.AchievementSystem.isUnlocked("final-sign"));
+  assert.ok(a.w.AchievementSystem.pending().length > 0);
+  a.click("#restart-game");
+  a.d.addEventListener("click", (e) => {
+    if (e.target.closest("#confirm-restart")) e.preventDefault();
+  });
+  a.click("#confirm-restart");
+  for (const id of [
+    "employee-pass",
+    "workbox",
+    "private-search",
+    "blue-marble",
+    "old-cabinet",
+    "final-sign",
+  ])
+    assert.equal(a.w.AchievementSystem.isUnlocked(id), false, id);
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), []);
+  assert.equal(local.getItem("arg-laf-achievements-v1"), null);
+  assert.equal(local.getItem("arg-laf-achievements-v1:pending"), null);
+  assert.equal(a.d.querySelectorAll(".achievement-toast").length, 0);
+  a.tick();
+  a.tick();
+  assert.equal(a.d.querySelectorAll(".achievement-toast").length, 0);
+  const fresh = boot(t, "search", local, session);
+  assert.equal(fresh.d.querySelectorAll(".achievement-toast").length, 0);
+  assert.deepEqual(Array.from(fresh.w.AchievementSystem.pending()), []);
+  assert.equal(fresh.w.AchievementSystem.unlock("employee-pass"), true);
+  assert.equal(fresh.$(".achievement-toast")?.dataset.achievement, "employee-pass");
+});
+
+test("成就：退出 Danny 员工模式只清除会话，不重置成就或待显示队列", (t) => {
+  const local = memory(), session = memory();
+  const a = login(t, local, session);
+  const before = Array.from(a.w.AchievementSystem.pending());
+  assert.ok(before.includes("employee-pass"));
+  a.click("#logout");
+  assert.equal(a.w.sessionStorage.getItem("harrow-session"), null);
+  for (const id of ["danny-visitor", "employee-pass", "workbox", "private-search"])
+    assert.ok(a.w.AchievementSystem.isUnlocked(id), id);
+  const after = Array.from(a.w.AchievementSystem.pending());
+  // 退出员工模式后回到游客区会新增 danny-visitor，但原有成就与队列不会被清空。
+  assert.ok(before.every((id) => after.includes(id)));
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()).slice(0, before.length), before);
+  assert.ok(a.d.querySelectorAll(".achievement-toast").length > 0);
+});
