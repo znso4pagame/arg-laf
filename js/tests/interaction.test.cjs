@@ -212,6 +212,8 @@ test("完整调查在 Danny 同一网页中从游客升级员工，读档对照�
     main.$(".source-details a").getAttribute("href"),
     "danny.html#journal",
   );
+  assert.equal(main.$(".source-details a").target, "_blank");
+  assert.equal(main.$(".source-details a").rel, "noopener");
   assert.equal(main.$(".source-details").open, false);
   const site = boot(t, "danny", local, session);
   assert.match(site.$("#permission-label").textContent, /游客/);
@@ -318,6 +320,7 @@ test("相机、证件套与票根各自保留同源入口，普通登记可保�
       a.$(".source-details a").getAttribute("href"),
       "danny.html#journal",
     );
+    assert.equal(a.$(".source-details a").target, "_blank");
     a.click('[data-save-record="' + id + '"]');
     a.click("#close-modal");
   }

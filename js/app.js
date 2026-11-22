@@ -759,7 +759,7 @@
       );
       if (item) {
         const source = item.archive
-          ? '<p>转录批次 HH / 0417。原始网页保留了归还照片与登记人随记。</p><a href="danny.html#journal" data-source="' +
+          ? '<p>转录批次 HH / 0417。原始网页保留了归还照片与登记人随记。</p><a href="danny.html#journal" target="_blank" rel="noopener" data-source="' +
             esc(item.id) +
             '">网页存档</a>'
           : item.id.startsWith("local-")
