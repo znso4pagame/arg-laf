@@ -150,7 +150,7 @@
     title.textContent = config.title;
     const how = document.createElement("span");
     how.className = "achievement-how";
-    how.textContent = "你是怎么做到的：" + config.how;
+    how.textContent = config.how;
     copy.append(kicker, title, how);
     const close = document.createElement("button");
     close.type = "button";
