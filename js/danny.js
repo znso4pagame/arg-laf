@@ -53,7 +53,8 @@
           })[c],
       );
     const flag = (id) => store.read().flags.includes(id),
-      has = (id) => store.read().clues.some((c) => c.id === id);
+      has = (id) => store.read().clues.some((c) => c.id === id),
+      unlockAchievement = (id) => w.AchievementSystem?.unlock(id);
     const staff = () => {
       try {
         return (
@@ -250,6 +251,10 @@
       motion.cancelTree(pane);
       pane.innerHTML = `<div class="reading-head"><span>${esc(f.source)}</span><button id="close-reading">收起</button></div><h2>${esc(f.title)}</h2>${body(f)}${["door-front", "door-back"].includes(key) ? `<button data-read="${key === "door-front" ? "door-back" : "door-front"}" class="flip-photo">${key === "door-front" ? "翻到背面" : "翻回正面"}</button>` : ""}${key === "intake" ? '<p><a href="index.html#application">原登记系统 / 人员申请附件</a></p>' : ""}<p class="save-note">本份材料已保存在“我的”。</p>`;
       store.collect({ ...f, url: "danny.html#" + f.tab + "--" + f.id });
+      if (key === "return-note") {
+        // achievement: found-url
+        unlockAchievement("found-url");
+      }
       const row = d
         .querySelector('.entry-list [data-read="' + key + '"]')
         ?.closest("article");
@@ -412,6 +417,10 @@
       ].includes(tab)
         ? tab
         : "journal";
+      if (!staff() && ["journal", "photos", "guestbook"].includes(active)) {
+        // achievement: danny-visitor
+        unlockAchievement("danny-visitor");
+      }
       chrome();
       $("#site-main").classList.remove("split-reading");
       let html = "";
@@ -695,6 +704,10 @@
         f.elements.password.value = "";
         store.mark("staff");
         store.collect({ ...files.staff, url: "danny.html#work" });
+        // achievement: employee-pass / workbox / private-search
+        unlockAchievement("employee-pass");
+        unlockAchievement("workbox");
+        unlockAchievement("private-search");
         let destination = returnAfterLogin || "work";
         returnAfterLogin = null;
         if (destination.startsWith("archive") && !flag("cabinet"))
@@ -713,6 +726,8 @@
           return;
         }
         store.mark("cabinet");
+        // achievement: old-cabinet
+        unlockAchievement("old-cabinet");
         route("work");
         status("旧柜索引已调取，可在本站旧柜中查阅。");
       }
@@ -737,6 +752,9 @@
           return;
         }
         store.mark("compared");
+        // achievement: compare-materials / original-copy
+        unlockAchievement("compare-materials");
+        unlockAchievement("original-copy");
         route("archive");
         status("字段核对已保存，附则现可查阅。");
       }

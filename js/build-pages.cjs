@@ -35,6 +35,7 @@ function buildSite(destination = path.join(root, "_site")) {
     "js/journey-guide.js",
     "js/motion.js",
     "js/search-index.js",
+    "js/achievements.js",
   ];
   const manifest = {};
   for (const file of assets) {
@@ -56,6 +57,15 @@ function buildSite(destination = path.join(root, "_site")) {
       path.join(root, "assets", image),
       path.join(out, "assets", image),
     );
+  const achievementIcons = fs
+    .readdirSync(path.join(root, "assets", "achievements"))
+    .filter((x) => x.endsWith(".png"))
+    .sort()
+    .map((x) => `assets/achievements/${x}`);
+  for (const image of achievementIcons) {
+    fs.mkdirSync(path.dirname(path.join(out, image)), { recursive: true });
+    fs.copyFileSync(path.join(root, image), path.join(out, image));
+  }
   const revision = hash(
     JSON.stringify(manifest) +
       fs
@@ -63,7 +73,10 @@ function buildSite(destination = path.join(root, "_site")) {
         .sort()
         .map((x) => fs.readFileSync(path.join(root, "html", x)))
         .join("") +
-      images.map((x) => fs.readFileSync(path.join(root, "assets", x))).join(""),
+      images.map((x) => fs.readFileSync(path.join(root, "assets", x))).join("") +
+      achievementIcons
+        .map((x) => fs.readFileSync(path.join(root, x)))
+        .join(""),
   );
   for (const file of fs
     .readdirSync(path.join(root, "html"))

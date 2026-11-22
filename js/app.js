@@ -33,6 +33,7 @@
   // 小鹿的回复独立于自动补全；老页面若缺失回复区域则保留旧容器兼容。
   const responseTarget = () => $("#xiaolu-message") || $("#suggestions");
   const has = (id) => store.read().clues.some((c) => c.id === id);
+  const unlockAchievement = (id) => window.AchievementSystem?.unlock(id);
   const label = {
     page: "页面入口",
     record: "档案",
@@ -626,6 +627,14 @@
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button,a");
     if (!b) return;
+    if (
+      b.matches(
+        ".found-receipt-link a, .found-suggestion-link[href='danny.html#journal--return-note']",
+      )
+    ) {
+      // achievement: blue-marble
+      unlockAchievement("blue-marble");
+    }
     const openHint = $("#hint-panel");
     if (
       openHint &&
@@ -774,6 +783,12 @@
               "",
             )}</div><button data-save-record="${esc(item.id)}" class="text-link">保存这份登记</button>`,
         );
+        const transcript = $("#modal-body .source-details");
+        transcript?.addEventListener("toggle", () => {
+          if (!transcript.open) return;
+          // achievement: found-transcript
+          unlockAchievement("found-transcript");
+        });
       }
     }
     if (b.dataset.source || b.dataset.saveRecord) {
@@ -798,7 +813,15 @@
           url: item.archive ? "danny.html#journal" : "index.html#search",
         });
         updateChrome();
-        if (b.dataset.saveRecord) toast("登记已保存到“我的”。");
+        if (b.dataset.source && item.archive) {
+          // achievement: old-archive
+          unlockAchievement("old-archive");
+        }
+        if (b.dataset.saveRecord) {
+          // achievement: collector
+          unlockAchievement("collector");
+          toast("登记已保存到“我的”。");
+        }
       }
     }
     if (b.dataset.file) openFile(b.dataset.file);
@@ -847,6 +870,12 @@
         (result.ending === "claimed" && result.name !== choice.name)
       )
         toast("本轮已有结局，已恢复当前保存的记录。");
+      else {
+        // achievement: final-sign / final-abandon
+        unlockAchievement(
+          choice.ending === "claimed" ? "final-sign" : "final-abandon",
+        );
+      }
       if (result.ending === "claimed") {
         $("#ending-reveal").hidden = false;
         $("#ending-status").textContent = "认领完成 / 岗位移交";
@@ -864,6 +893,10 @@
       store.update((s) => (s.settings.assist = !s.settings.assist));
       syncAssist();
       matchInput($("#search").value);
+      if (store.read().settings.assist) {
+        // achievement: clue-assist
+        unlockAchievement("clue-assist");
+      }
     }
     if (b.id === "hint-panel-toggle" || b.id === "hint-panel-close") {
       e.preventDefault();
@@ -974,8 +1007,13 @@
     }
     if (form.id === "search-form") {
       e.preventDefault();
-      if (!composing)
+      if (!composing) {
+        if (!searchPage) {
+          // achievement: first-search
+          unlockAchievement("first-search");
+        }
         search($("#search").value, { navigate: !searchPage });
+      }
     }
     if (form.id === "intro-form") {
       e.preventDefault();
@@ -1160,6 +1198,10 @@
       : startupState?.zhaohui === 1 && startupState.hash === location.hash
         ? String(startupState.query || "").slice(0, 80)
         : store.read().lastQuery;
+  if (!searchPage) {
+    // achievement: first-visit
+    unlockAchievement("first-visit");
+  }
   home({ remember: false, syncUrl: false });
   syncAssist();
   if (searchPage) {
