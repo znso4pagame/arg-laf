@@ -527,6 +527,8 @@
       if (b.id === "confirm-restart") {
         motion.cancelAll();
         store.reset();
+        // achievement: 完整注销时重置成就与待显示通知
+        w.AchievementSystem?.reset();
         try {
           w.sessionStorage.removeItem("harrow-session");
           w.sessionStorage.removeItem("harrow-run-token");
