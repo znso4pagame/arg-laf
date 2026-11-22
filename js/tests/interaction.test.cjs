@@ -2129,12 +2129,16 @@ test("较多既有收藏不会挤掉新增物品回执，奖励可在完整调�
   assert.equal(a.state().clues.filter((c) => c.id.startsWith('existing-')).length, 100);
 });
 
-test("成就：首次访问持久化，刷新后不再重复弹出", (t) => {
+test("成就：首次访问持久化，完整展示后刷新不再重复弹出", (t) => {
   const local = memory();
   const a = boot(t, "index", local);
   assert.ok(a.w.AchievementSystem.isUnlocked("first-visit"));
   assert.equal(a.d.querySelectorAll(".achievement-toast").length, 1);
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), ["first-visit"]);
   assert.match(a.$(".achievement-toast").textContent, /初来乍到/);
+  a.tick();
+  a.tick();
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), []);
   const b = boot(t, "index", local);
   assert.equal(b.d.querySelectorAll(".achievement-toast").length, 0);
   assert.ok(b.w.AchievementSystem.isUnlocked("first-visit"));
@@ -2153,6 +2157,9 @@ test("成就：多个解锁依次排队，同一时刻只有一条提示", (t) =
   a.tick();
   a.tick();
   assert.equal(a.$(".achievement-toast").dataset.achievement, "collector");
+  a.tick();
+  a.tick();
+  assert.equal(a.d.querySelectorAll(".achievement-toast").length, 0);
 });
 
 test("成就：?resetAchievements=1 与控制台 reset 都能重置", (t) => {
@@ -2161,11 +2168,14 @@ test("成就：?resetAchievements=1 与控制台 reset 都能重置", (t) => {
   a.w.AchievementSystem.unlock("collector");
   const b = boot(t, "index", local, memory(), "?resetAchievements=1");
   assert.equal(b.w.AchievementSystem.isUnlocked("collector"), false);
+  // 重置会清空旧解锁与待显示队列；随后首访在本页重新解锁并进入队列。
+  assert.deepEqual(Array.from(b.w.AchievementSystem.pending()), ["first-visit"]);
   assert.equal(b.d.querySelectorAll(".achievement-toast").length, 1);
   assert.equal(b.$(".achievement-toast").dataset.achievement, "first-visit");
   b.w.AchievementSystem.reset();
   assert.equal(b.d.querySelectorAll(".achievement-toast").length, 0);
   assert.equal(local.getItem("arg-laf-achievements-v1"), null);
+  assert.equal(local.getItem("arg-laf-achievements-v1:pending"), null);
 });
 
 test("成就：主站搜索、转录说明、旧网页和收藏接线在真实交互上触发", (t) => {
@@ -2235,4 +2245,68 @@ test("成就：蓝玻璃珠链接与便笺汇合点分别解锁两个网址相�
   assert.ok(a.w.AchievementSystem.isUnlocked("blue-marble"));
   const site = boot(t, "danny", local, memory(), "#journal--return-note");
   assert.ok(site.w.AchievementSystem.isUnlocked("found-url"));
+});
+
+test("成就：解锁后立即跳页，通知会由下一页继续显示", (t) => {
+  const local = memory();
+  const a = boot(t, "index", local);
+  // 模拟首访提示完整显示后，新成就在点击跳转前解锁但未及展示。
+  a.tick();
+  a.tick();
+  a.w.AchievementSystem.unlock("blue-marble");
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), ["blue-marble"]);
+  // 当前页已开始显示，但通知仍留在持久队列中；此时立刻跳页也不会丢失。
+  assert.equal(a.$(".achievement-toast")?.dataset.achievement, "blue-marble");
+  const b = boot(t, "danny", local, memory());
+  assert.equal(b.$(".achievement-toast")?.dataset.achievement, "blue-marble");
+  assert.match(b.$(".achievement-toast").textContent, /蓝色玻璃珠/);
+  b.tick();
+  b.tick();
+  // Danny 游客区本身会解锁 danny-visitor，队列继续显示它。
+  assert.deepEqual(Array.from(b.w.AchievementSystem.pending()), ["danny-visitor"]);
+  b.tick();
+  b.tick();
+  assert.deepEqual(Array.from(b.w.AchievementSystem.pending()), []);
+});
+
+test("成就：多个成就快速解锁，跨页刷新后仍按顺序逐条显示", (t) => {
+  const local = memory();
+  const a = boot(t, "index", local);
+  a.tick();
+  a.tick();
+  a.w.AchievementSystem.unlock("first-search");
+  a.w.AchievementSystem.unlock("old-archive");
+  a.w.AchievementSystem.unlock("collector");
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), [
+    "first-search",
+    "old-archive",
+    "collector",
+  ]);
+  const b = boot(t, "search", local);
+  assert.equal(b.$(".achievement-toast")?.dataset.achievement, "first-search");
+  b.tick();
+  b.tick();
+  assert.equal(b.$(".achievement-toast")?.dataset.achievement, "old-archive");
+  const c = boot(t, "search", local);
+  assert.equal(c.$(".achievement-toast")?.dataset.achievement, "old-archive");
+  c.tick();
+  c.tick();
+  assert.equal(c.$(".achievement-toast")?.dataset.achievement, "collector");
+  c.tick();
+  c.tick();
+  assert.equal(c.d.querySelectorAll(".achievement-toast").length, 0);
+  assert.deepEqual(Array.from(c.w.AchievementSystem.pending()), []);
+});
+
+test("成就：已展示完成的成就不会在换页或刷新后再次弹出", (t) => {
+  const local = memory();
+  const a = boot(t, "index", local);
+  a.tick();
+  a.tick();
+  assert.deepEqual(Array.from(a.w.AchievementSystem.pending()), []);
+  const b = boot(t, "search", local);
+  assert.equal(b.d.querySelectorAll(".achievement-toast").length, 0);
+  assert.equal(b.w.AchievementSystem.isUnlocked("first-visit"), true);
+  assert.equal(b.w.AchievementSystem.unlock("first-visit"), false);
+  assert.deepEqual(Array.from(b.w.AchievementSystem.pending()), []);
 });
