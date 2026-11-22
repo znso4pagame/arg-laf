@@ -23,7 +23,7 @@
     <link rel="stylesheet" href="../css/refinement.css" />
     <link rel="stylesheet" href="../css/motion.css" />
   </head>
-  <body>
+  <body data-page="home">
     <div class="utility">
       <div class="wrap">
         <span>找回网 · 免费登记 · 公益寻物</span
@@ -61,6 +61,60 @@
       </nav>
       <span class="header-note">遗失物品信息查询与登记服务</span>
     </header>
+    <div class="wrap">
+      <div class="notice">
+        <span class="notice-label">平台公告</span>
+        <p>
+          查询提示：物品名称、地点和登记编号均可检索。已经取得的附件可以在“我的”中保存、备注和对照。
+        </p>
+        <button data-nav="guide" aria-label="查看认领须知">↗</button>
+      </div>
+    </div>
+    <button
+      id="hint-panel-toggle"
+      class="hint-control"
+      type="button"
+      aria-controls="hint-panel"
+      aria-expanded="false"
+      title="展开当前调查提示"
+    >
+      Hint <span aria-hidden="true">?</span>
+    </button>
+    <aside id="hint-panel" class="hint-panel" aria-label="调查提示" hidden>
+      <div class="hint-panel-head">
+        <strong>Hint</strong>
+        <button id="hint-panel-close" type="button" aria-label="关闭提示">×</button>
+      </div>
+      <div id="hint-guide-slot"></div>
+      <section
+        id="field-guide"
+        class="field-guide"
+        aria-labelledby="guide-title"
+      >
+        <div class="guide-heading">
+          <span class="guide-mark" aria-hidden="true">?</span>
+          <div>
+            <h3 id="guide-title">检索帮助</h3>
+            <span>需要时查看方向提示。</span>
+          </div>
+          <button
+            id="hint-toggle"
+            type="button"
+            aria-controls="hint-content"
+            aria-expanded="false"
+          >
+            查看提示 <span aria-hidden="true">＋</span>
+          </button>
+        </div>
+        <div id="hint-content" class="guide-content" hidden>
+          <p id="hint-body" role="status" aria-live="polite"></p>
+          <div class="guide-actions">
+            <button id="hint-search" type="button" hidden></button
+            ><span>按需查看，不必全部展开。</span>
+          </div>
+        </div>
+      </section>
+    </aside>
     <main class="wrap">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
@@ -174,42 +228,7 @@
             匹配度仅表示文字接近，不代表失物已经找到。片段提示不会自动发起查询。
           </p>
         </section>
-        <section
-          id="field-guide"
-          class="field-guide"
-          aria-labelledby="guide-title"
-        >
-          <div class="guide-heading">
-            <span class="guide-mark" aria-hidden="true">?</span>
-            <div>
-              <h3 id="guide-title">检索帮助</h3>
-              <span>需要时查看方向提示。</span>
-            </div>
-            <button
-              id="hint-toggle"
-              type="button"
-              aria-controls="hint-content"
-              aria-expanded="false"
-            >
-              查看提示 <span aria-hidden="true">＋</span>
-            </button>
-          </div>
-          <div id="hint-content" class="guide-content" hidden>
-            <p id="hint-body" role="status" aria-live="polite"></p>
-            <div class="guide-actions">
-              <button id="hint-search" type="button" hidden></button
-              ><span>按需查看，不必全部展开。</span>
-            </div>
-          </div>
-        </section>
       </section>
-      <div class="notice">
-        <span class="notice-label">平台公告</span>
-        <p>
-          查询提示：物品名称、地点和登记编号均可检索。已经取得的附件可以在“我的”中保存、备注和对照。
-        </p>
-        <button data-nav="guide" aria-label="查看认领须知">↗</button>
-      </div>
       <div class="content-grid">
         <section class="results-area" aria-labelledby="results-title">
           <div class="section-heading">

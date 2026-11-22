@@ -87,5 +87,24 @@
       ),
     ].slice(0, 6);
   }
-  return { fold, matches, related };
+  /* 自动补全只从调用方已经可见的材料里取词，不读取隐藏剧情。
+     命中的原词优先，随后补上相关标签，和普通搜索使用同一份数据。 */
+  function suggest(query, records, limit = 6) {
+    const q = fold(query).slice(0, 80);
+    if (!q) return [];
+    const terms = [
+      ...new Set(
+        matches(query, records).flatMap((x) => [
+          x.name || x.title,
+          x.type,
+          x.place?.split(" · ")[0],
+          ...(x.keywords || []).slice(0, 3),
+        ]),
+      ),
+    ].filter((x) => x && fold(x) !== q);
+    const direct = terms.filter((x) => fold(x).includes(q));
+    const rest = terms.filter((x) => !fold(x).includes(q));
+    return [...direct, ...rest].slice(0, limit);
+  }
+  return { fold, matches, related, suggest };
 });

@@ -1817,13 +1817,112 @@ test("收藏筛选、重点和搜索重绘后仍保留键盘操作位置", (t) =
   assert.equal(a.d.activeElement.id, 'notebook-search');
 });
 
+test("普通自动补全只列数据建议，点击建议仅填入搜索框而不提交", (t) => {
+  const a = boot(t, "search", memory(), memory(), "?q=");
+  a.set("#search", "钱包");
+  assert.ok(a.$("#suggestions [data-suggestion]"));
+  assert.equal(a.$("#suggestions .suggestion-response"), null);
+  const before = a.state().searchHistory.length;
+  const first = a.$("#suggestions [data-suggestion]").dataset.suggestion;
+  a.click("#suggestions [data-suggestion]");
+  assert.equal(a.$("#search").value, first);
+  assert.equal(a.state().searchHistory.length, before);
+  assert.equal(a.$("#suggestions").hidden, true);
+  assert.equal(a.$("#suggestions").textContent, "");
+  assert.equal(a.$("#xiaolu-message").hidden, true);
+});
+test("独立结果页可直接打开与刷新，顶部搜索框保留查询并可再次提交", (t) => {
+  const a = boot(
+    t,
+    "search",
+    memory(),
+    memory(),
+    "?q=" + encodeURIComponent("棕色皮质钱包"),
+  );
+  assert.equal(a.$("#search").value, "棕色皮质钱包");
+  assert.ok(a.$('[data-item="0816"]'));
+  assert.match(a.$("#result-meta").textContent, /关键词：棕色皮质钱包/);
+  a.set("#search", "钱包");
+  a.submit("#search-form");
+  assert.equal(a.$("#search").value, "钱包");
+  assert.equal(new URLSearchParams(a.w.location.search).get("q"), "钱包");
+  assert.ok(a.$('[data-item="0816"]'));
+  const b = boot(t, "search", memory(), memory(), "?q=%E9%92%B1%E5%8C%85");
+  assert.equal(b.$("#search").value, "钱包");
+});
+test("结果页小鹿回复独立于自动补全，未触发时保持隐藏", (t) => {
+  const local = memory();
+  const a = boot(t, "search", local, memory(), "?q=" + encodeURIComponent("小鹿"));
+  assert.equal(a.$("#xiaolu-message").hidden, false);
+  assert.match(a.$("#xiaolu-message").textContent, /小鹿/);
+  assert.equal(a.$("#suggestions").hidden, true);
+  assert.equal(a.$("#suggestions").textContent, "");
+  const b = boot(
+    t,
+    "search",
+    local,
+    memory(),
+    "?q=" + encodeURIComponent("完全不相关的字符串"),
+  );
+  assert.equal(b.$("#xiaolu-message").hidden, true);
+});
+test("结果页无匹配显示旧式 404 与重新搜索和返回入口", (t) => {
+  const a = boot(
+    t,
+    "search",
+    memory(),
+    memory(),
+    "?q=" + encodeURIComponent("完全不相关的字符串"),
+  );
+  assert.match(a.$("#results").textContent, /404 - NOT FOUND/);
+  assert.match(a.$("#results").textContent, /抱歉，未找到与您搜索内容相匹配的记录。/);
+  assert.ok(a.$('#results .not-found-actions a[href="search.html"]'));
+  assert.ok(a.$('#results .not-found-actions a[href="index.html"]'));
+});
+test("首页 Hint 收纳本次查档与检索帮助，且只显示一份", (t) => {
+  const a = boot(t, "index", memory(), memory(), "#home");
+  assert.equal(a.$("#hint-panel").hidden, true);
+  assert.equal(a.d.querySelectorAll("#journey-guide").length, 1);
+  assert.equal(a.d.querySelectorAll("#field-guide").length, 1);
+  assert.ok(a.$("#hint-guide-slot #journey-guide"));
+  assert.ok(a.$("#hint-panel #field-guide"));
+  assert.equal(a.$("#hint-panel-toggle").getAttribute("aria-expanded"), "false");
+  a.click("#hint-panel-toggle");
+  assert.equal(a.$("#hint-panel").hidden, false);
+  assert.equal(a.$("#hint-panel-toggle").getAttribute("aria-expanded"), "true");
+  a.click("#hint-panel-close");
+  assert.equal(a.$("#hint-panel").hidden, true);
+  assert.equal(a.$("#hint-panel-toggle").getAttribute("aria-expanded"), "false");
+});
+test("平台公告紧接首页导航横幅且全程只有一份", (t) => {
+  const a = boot(t, "index", memory(), memory(), "#home");
+  assert.equal(a.d.querySelectorAll(".notice").length, 1);
+  assert.equal(a.$(".notice").parentElement.previousElementSibling, a.$("header.header"));
+  assert.match(a.$(".notice").textContent, /平台公告/);
+  assert.match(
+    a.$(".notice").textContent,
+    /查询提示：物品名称、地点和登记编号均可检索/,
+  );
+  const b = boot(t, "search", memory(), memory(), "?q=钱包");
+  assert.equal(b.d.querySelectorAll(".notice").length, 0);
+});
+test("首页提交搜索仍本地渲染，自动补全与小鹿回复互不覆盖", (t) => {
+  const a = boot(t, "index", memory(), memory(), "#home");
+  a.set("#search", "钱包");
+  assert.ok(a.$("#suggestions [data-suggestion]"));
+  assert.equal(a.$("#suggestions .suggestion-response"), null);
+  a.submit("#search-form");
+  assert.ok(a.$('[data-item="0816"]'));
+  assert.match(a.$("#suggestions").textContent, /小鹿/);
+  assert.equal(a.$("#suggestions [data-suggestion]"), null);
+});
 test("小鹿从第一次普通失物查询就出现，每次一句并可点击原句续读", (t) => {
   const a = boot(t);
   a.click('#intro-skip');
   a.search('相机');
   assert.match(a.$('#suggestions').textContent, /我是小鹿/);
   assert.equal(a.d.querySelectorAll('.suggestion-response').length, 1);
-  assert.ok(a.$('#suggestions [data-search="旧馆站"]'));
+  assert.ok(a.$('#results .related-queries [data-search="旧馆站"]'));
   assert.ok(a.$('[data-item="0810"]'));
   let messages = a.state().clues.filter((c) => c.id.startsWith('xiaolu-'));
   assert.equal(messages.length, 1);
