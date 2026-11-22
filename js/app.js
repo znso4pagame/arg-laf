@@ -29,6 +29,9 @@
     claimDraft = "",
     toastTimer,
     navigationStamp = "";
+  const searchPage = document.body.dataset.page === "search";
+  // 小鹿的回复独立于自动补全；老页面若缺失回复区域则保留旧容器兼容。
+  const responseTarget = () => $("#xiaolu-message") || $("#suggestions");
   const has = (id) => store.read().clues.some((c) => c.id === id);
   const label = {
     page: "页面入口",
@@ -91,7 +94,9 @@
       guide.id = "journey-guide";
       guide.className = "journey-guide";
       guide.setAttribute("aria-label", "当前调查目标");
-      $(".content-grid").before(guide);
+      const slot = $("#hint-guide-slot");
+      if (slot) slot.append(guide);
+      else $(".content-grid").before(guide);
     }
     window.ZHAOHUI_GUIDE.render(guide, s, { page: "main" });
     $("#staff-count").textContent =
@@ -115,6 +120,58 @@
         ? "PERSONAL ARCHIVE / 已取得材料"
         : "PUBLIC RECORDS / 公开拾物登记";
     historyChrome();
+  }
+  // 普通自动补全：只读取公开登记和已经取得的材料，不混入小鹿对话。
+  function renderSuggestions(query) {
+    const node = $("#suggestions");
+    if (!node) return;
+    const text = String(query || "").trim();
+    if (!text || composing) {
+      node.hidden = true;
+      node.replaceChildren();
+      return;
+    }
+    const s = store.read();
+    const words = searchIndex.suggest(text, [
+      ...data.items,
+      ...s.registrations,
+      ...s.clues,
+    ]);
+    if (!words.length) {
+      node.hidden = true;
+      node.replaceChildren();
+      return;
+    }
+    motion.cancelTree(node);
+    node.innerHTML = words
+      .map(
+        (word) =>
+          `<button type="button" data-suggestion="${esc(word)}"><span class="suggestion-word">${esc(word)}</span><span aria-hidden="true">↗</span></button>`,
+      )
+      .join("");
+    node.hidden = false;
+    motion.enter(node, { items: "button" });
+  }
+  function closeHint() {
+    const panel = $("#hint-panel"),
+      toggle = $("#hint-panel-toggle");
+    if (!panel) return;
+    panel.hidden = true;
+    toggle?.setAttribute("aria-expanded", "false");
+  }
+  function syncQueryUrl(query, { replace = false } = {}) {
+    if (!searchPage) return;
+    const encoded = "?q=" + encodeURIComponent(query);
+    const url = location.pathname + encoded + location.hash;
+    const state = {
+      zhaohui: 1,
+      page: "search",
+      runToken: store.read().runToken,
+      query,
+    };
+    if (replace || location.search === encoded)
+      history.replaceState(state, "", url);
+    else history.pushState(state, "", url);
   }
   function clearMatch() {
     $("#clue-match").hidden = true;
@@ -208,20 +265,19 @@
     if (!reply) {
       if (!s.ending && !s.clues.some((c) => c.id.startsWith("whisper-truth")) &&
         /你丢了什么|你的失物/.test(matcher.fold(query)) && has("xiaolu-arrival-lost-2")) {
-        $("#suggestions").hidden = false;
-        $("#suggestions").innerHTML = '<p class="found-system-note">已保存的失物描述：能透光，装在纸里；包纸的一角是焦的。</p><a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>查看随身拾获物 &gt;&gt;</a>';
+        const note = responseTarget();
+        note.hidden = false;
+        note.innerHTML = '<p class="found-system-note">已保存的失物描述：能透光，装在纸里；包纸的一角是焦的。</p><a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>查看随身拾获物 &gt;&gt;</a>';
       }
       return false;
     }
-    const ordinary = searchIndex.related(records, query).slice(0, 2);
-    motion.cancelTree($("#suggestions"));
-    $("#suggestions").hidden = false;
-    $("#suggestions").innerHTML =
-      ordinary.slice(0, 1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("") +
+    const note = responseTarget();
+    motion.cancelTree(note);
+    note.hidden = false;
+    note.innerHTML =
       `<button type="button" class="suggestion-response" data-search="${esc(reply.text)}" title="用这句话继续查询">${esc(reply.text)}</button>` +
-      ordinary.slice(1).map((text) => `<button type="button" data-search="${esc(text)}">${esc(text)}</button>`).join("") +
       (reply.context === "lost" ? '<a class="found-suggestion-link" href="index.html#mine" data-pocket-focus>查看随身拾获物 &gt;&gt;</a>' : "");
-    motion.enter($("#suggestions"), { items: ".suggestion-response" });
+    motion.enter(note, { items: ".suggestion-response" });
     store.collect({
       id: reply.id, kind: "message", title: "查询建议 / " + reply.text,
       source: "找回网 · 实际显示的查询建议", summary: reply.text, body: [reply.text],
@@ -280,12 +336,13 @@
               : stage === "first"
                 ? ["我是小鹿。", "旧记录还在。"]
                 : ["你看到旧档了。", "我还在等。"];
-    $("#suggestions").hidden = false;
-    motion.cancelTree($("#suggestions"));
-    $("#suggestions").innerHTML = words
+    const note = responseTarget();
+    note.hidden = false;
+    motion.cancelTree(note);
+    note.innerHTML = words
       .map((t) => `<div class="suggestion-response">${esc(t)}</div>`)
       .join("");
-    motion.enter($("#suggestions"), { items: ".suggestion-response" });
+    motion.enter(note, { items: ".suggestion-response" });
     store.collect({
       id,
       kind: "message",
@@ -362,8 +419,9 @@
     if (clues.length)
       html += `<div class="collected-search"><h3>我的已收集材料</h3>${clues.map((c) => `<button class="record-action" data-file="${esc(c.id)}">${esc(c.title)}</button>`).join("")}</div>`;
     if (!items.length && !clues.length)
-      html =
-        '<div class="empty"><h3>暂无匹配记录</h3><p>可以更换物品名称，或在“我的”回看已取得材料。</p></div>';
+      html = searchPage
+        ? '<section class="not-found" role="alert"><span class="not-found-code">404 - NOT FOUND</span><h3>这条记录不在索引里</h3><p>抱歉，未找到与您搜索内容相匹配的记录。</p><div class="not-found-actions"><a href="search.html">重新搜索 ↗</a><a href="index.html">返回找回网首页 ↗</a></div></section>'
+        : '<div class="empty"><h3>暂无匹配记录</h3><p>可以更换物品名称，或在“我的”回看已取得材料。</p></div>';
     if (s.ending === "claimed")
       html =
         `<article class="record"><h3>${esc(s.name)} / 客服 0001</h3><p>状态：待认领。岗位已经移交。</p></article>` +
@@ -408,6 +466,10 @@
     return location.hash + "|" + JSON.stringify(history.state);
   }
   function commitView(hash, { replace = false } = {}) {
+    if (searchPage) {
+      syncQueryUrl(displayedQuery, { replace });
+      return;
+    }
     const state = {
       zhaohui: 1,
       runToken: store.read().runToken,
@@ -423,7 +485,7 @@
       history.pushState(state, "", hash);
     navigationStamp = stampNavigation();
   }
-  function search(query, { record = true, syncUrl = true, respond = true } = {}) {
+  function search(query, { record = true, syncUrl = true, respond = true, navigate = false } = {}) {
     query = String(query).trim().slice(0, 80);
     if (!query) {
       $("#search").focus();
@@ -435,6 +497,13 @@
     clearMatch();
     $("#search").value = query;
     $("#suggestions").hidden = true;
+    $("#suggestions").replaceChildren();
+    const note = responseTarget();
+    if (note) {
+      motion.cancelTree(note);
+      note.hidden = true;
+      note.replaceChildren();
+    }
     store.update((s) => {
       s.lastQuery = query;
       if (record && s.searchHistory[s.searchCursor] !== query) {
@@ -450,8 +519,14 @@
     updateChrome();
     if (respond) whisper();
     matchInput(query, { submitted: true });
-    if (syncUrl) commitView("#search");
+    if (syncUrl) {
+      if (searchPage) syncQueryUrl(query);
+      else commitView("#search");
+    }
     motion.enter($("#results"), { items: ".item" });
+    // 提交搜索后进入独立结果页；本页仍保留一次本地渲染，供历史记录与无脚本回退使用。
+    if (navigate && !searchPage)
+      location.href = "search.html?q=" + encodeURIComponent(query);
   }
   function home({ remember = true, section = "home", syncUrl = true } = {}) {
     itemCategory = "all";
@@ -460,10 +535,20 @@
     document.body.classList.remove("notebook-mode");
     $("#search").value = "";
     $("#suggestions").hidden = true;
+    $("#suggestions").replaceChildren();
+    const note = responseTarget();
+    if (note) {
+      motion.cancelTree(note);
+      note.hidden = true;
+      note.replaceChildren();
+    }
     clearMatch();
     renderResults();
     updateChrome();
-    if (syncUrl) commitView(section === "all" ? "#all" : "#home");
+    if (syncUrl) {
+      if (searchPage) location.href = "index.html#" + section;
+      else commitView(section === "all" ? "#all" : "#home");
+    }
     motion.enter($("#results"), { items: ".item" });
   }
   function renderApplication() {
@@ -541,6 +626,14 @@
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button,a");
     if (!b) return;
+    const openHint = $("#hint-panel");
+    if (
+      openHint &&
+      !openHint.hidden &&
+      b.id !== "hint-panel-toggle" &&
+      !b.closest("#hint-panel")
+    )
+      closeHint();
     const localTarget =
       b.tagName === "A" &&
       /^index\.html#(mine|application|search)$/.exec(
@@ -554,12 +647,21 @@
       navigateToHash(hash);
       if (b.hasAttribute("data-pocket-focus")) $("#found-title")?.focus();
     }
+    if (b.dataset.suggestion) {
+      // 下拉建议只填词，是否搜索由用户再次提交决定。
+      e.preventDefault();
+      $("#search").value = b.dataset.suggestion;
+      $("#suggestions").hidden = true;
+      $("#suggestions").replaceChildren();
+      $("#search").focus({ preventScroll: true });
+      return;
+    }
     if (b.dataset.inspectFound) inspectFound(b.dataset.inspectFound);
     if (b.dataset.returnFound) handOverFound(b);
     if (b.dataset.search) {
       e.preventDefault();
       if ($("#modal").open) $("#modal").close();
-      search(b.dataset.search);
+      search(b.dataset.search, { navigate: !searchPage });
     }
     if (b.id === "query-back" || b.id === "query-forward") {
       const s = store.read(),
@@ -763,6 +865,18 @@
       syncAssist();
       matchInput($("#search").value);
     }
+    if (b.id === "hint-panel-toggle" || b.id === "hint-panel-close") {
+      e.preventDefault();
+      const panel = $("#hint-panel");
+      if (!panel) return;
+      panel.hidden = b.id === "hint-panel-close" ? true : !panel.hidden;
+      $("#hint-panel-toggle")?.setAttribute(
+        "aria-expanded",
+        String(!panel.hidden),
+      );
+      if (!panel.hidden && b.id === "hint-panel-toggle")
+        $("#hint-guide-slot [data-guide-toggle]")?.focus?.();
+    }
     if (b.id === "hint-toggle") {
       $("#hint-content").hidden = !$("#hint-content").hidden;
       b.setAttribute("aria-expanded", String(!$("#hint-content").hidden));
@@ -799,6 +913,7 @@
       $("#toast").hidden = true;
       $("#toast").replaceChildren();
       $("#intro-form").reset();
+      closeHint();
       $("#hint-content").hidden = true;
       $("#hint-toggle").setAttribute("aria-expanded", "false");
       $("#hint-body").textContent = "";
@@ -859,7 +974,8 @@
     }
     if (form.id === "search-form") {
       e.preventDefault();
-      if (!composing) search($("#search").value);
+      if (!composing)
+        search($("#search").value, { navigate: !searchPage });
     }
     if (form.id === "intro-form") {
       e.preventDefault();
@@ -870,7 +986,7 @@
         s.introduced = true;
       });
       $("#intro").close();
-      search(goal);
+      search(goal, { navigate: true });
     }
     if (form.id === "personal-note-form") {
       e.preventDefault();
@@ -934,19 +1050,29 @@
   $("#search").addEventListener("compositionstart", () => {
     composing = true;
     clearMatch();
+    renderSuggestions("");
   });
   $("#search").addEventListener("compositionend", () => {
     composing = false;
+    renderSuggestions($("#search").value);
     matchInput($("#search").value);
   });
   $("#search").addEventListener("input", () => {
-    if (!composing) matchInput($("#search").value);
+    if (!composing) {
+      renderSuggestions($("#search").value);
+      matchInput($("#search").value);
+    }
   });
   $("#search").addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       clearMatch();
       $("#suggestions").hidden = true;
+      $("#suggestions").replaceChildren();
     }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("#hint-panel") && !$("#hint-panel").hidden)
+      closeHint();
   });
   function dismissIntro() {
     store.update((s) => (s.introduced = true));
@@ -984,6 +1110,10 @@
     if (store.read().ending) {
       motion.cancelTree($("#suggestions"));
       $("#suggestions").hidden = true;
+      const note = responseTarget();
+      motion.cancelTree(note);
+      note.hidden = true;
+      note.replaceChildren();
     }
     if (store.read().ending || !store.read().settings.assist) clearMatch();
     if (document.body.classList.contains("notebook-mode")) {
@@ -1015,24 +1145,45 @@
     pendingChoice = null;
   });
   const startupState = history.state;
+  const urlQuery = searchPage
+    ? String(new URLSearchParams(location.search).get("q") || "").slice(0, 80)
+    : "";
   const expiredNavigation =
+    !searchPage &&
     startupState?.zhaohui === 1 &&
     (startupState.runToken || "initial") !== store.read().runToken;
   if (expiredNavigation) history.replaceState(null, "", "#home");
-  const savedQuery = expiredNavigation
-    ? ""
-    : startupState?.zhaohui === 1 && startupState.hash === location.hash
-      ? String(startupState.query || "").slice(0, 80)
-      : store.read().lastQuery;
+  const savedQuery = searchPage
+    ? urlQuery
+    : expiredNavigation
+      ? ""
+      : startupState?.zhaohui === 1 && startupState.hash === location.hash
+        ? String(startupState.query || "").slice(0, 80)
+        : store.read().lastQuery;
   home({ remember: false, syncUrl: false });
   syncAssist();
+  if (searchPage) {
+    history.replaceState(
+      {
+        zhaohui: 1,
+        page: "search",
+        runToken: store.read().runToken,
+        query: savedQuery,
+      },
+      "",
+      location.pathname +
+        (savedQuery ? "?q=" + encodeURIComponent(savedQuery) : "") +
+        location.hash,
+    );
+  }
   if (savedQuery)
     search(savedQuery, {
       record: !store.read().searchHistory.length,
       syncUrl: false,
-      respond: false,
+      respond: searchPage,
     });
   function navigateToHash(hash) {
+    if (searchPage) return;
     if ($("#modal").open) $("#modal").close();
     if (hash === "#mine") {
       renderMine({ animate: true });
@@ -1065,6 +1216,7 @@
     }
   }
   function restoreNavigation() {
+    if (searchPage) return;
     const snapshot = history.state;
     if (
       snapshot?.zhaohui === 1 &&
@@ -1103,14 +1255,16 @@
   });
   window.addEventListener("popstate", restoreNavigation);
   window.addEventListener("hashchange", restoreNavigation);
-  if (!store.read().introduced) $("#intro").showModal();
+  if (!searchPage && !store.read().introduced) $("#intro").showModal();
   if (
+    !searchPage &&
     ["#mine", "#application", "#search", "#home", "#all"].includes(
       location.hash,
     )
   )
     navigateToHash(location.hash);
-  commitView(location.hash || ($("#search").value ? "#search" : "#home"), {
-    replace: true,
-  });
+  if (!searchPage)
+    commitView(location.hash || ($("#search").value ? "#search" : "#home"), {
+      replace: true,
+    });
 })();
