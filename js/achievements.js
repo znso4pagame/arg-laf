@@ -1,7 +1,8 @@
-/* 纯前端成就提示：独立存档、单条弹窗与队列，不参与剧情判定。 */
+/* 纯前端成就提示：解锁状态与待显示通知分别持久化，不参与剧情判定。 */
 (function (root) {
   "use strict";
   const KEY = "arg-laf-achievements-v1";
+  const PENDING_KEY = KEY + ":pending";
   const ACHIEVEMENTS = {
     "first-visit": { title: "初来乍到", how: "打开“找回网”主站", icon: "🏠" },
     "first-search": { title: "第一次搜索", how: "在主站使用搜索功能", icon: "🔍" },
@@ -48,8 +49,9 @@
   };
 
   let unlocked = load();
-  let queue = [];
+  let pending = loadPending();
   let current = null;
+  let currentId = null;
   let generation = 0;
 
   function load() {
@@ -64,6 +66,33 @@
       root.localStorage.setItem(KEY, JSON.stringify(unlocked));
     } catch {}
   }
+  function loadPending() {
+    try {
+      const saved = JSON.parse(root.localStorage.getItem(PENDING_KEY) || "[]");
+      if (Array.isArray(saved))
+        return [
+          ...new Set(
+            saved.filter(
+              (id) =>
+                ACHIEVEMENTS[id] &&
+                Object.prototype.hasOwnProperty.call(unlocked, id),
+            ),
+          ),
+        ];
+    } catch {}
+    return [];
+  }
+  function savePending() {
+    try {
+      root.localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+    } catch {}
+  }
+  function commit(id) {
+    const index = pending.indexOf(id);
+    if (index < 0) return;
+    pending.splice(index, 1);
+    savePending();
+  }
   function isUnlocked(id) {
     return Object.prototype.hasOwnProperty.call(unlocked, id);
   }
@@ -77,17 +106,23 @@
     }
     return node;
   }
-  function remove(node, token) {
+  function remove(node, token, id) {
     if (token !== generation) return;
     node.remove();
     if (current === node) current = null;
+    if (currentId === id) currentId = null;
+    // 通知完整展示后才从持久队列移除；中途跳页会留给下一页继续显示。
+    commit(id);
     showNext();
   }
   function showNext() {
-    if (current || !queue.length) return;
-    const id = queue.shift();
+    if (current || !pending.length) return;
+    const id = pending[0];
     const config = ACHIEVEMENTS[id];
-    if (!config) return showNext();
+    if (!config || !isUnlocked(id)) {
+      commit(id);
+      return showNext();
+    }
     const token = ++generation;
     const node = document.createElement("div");
     node.className = "achievement-toast";
@@ -125,40 +160,55 @@
     close.addEventListener("click", () => {
       const closeToken = ++generation;
       node.classList.add("is-leaving");
-      root.setTimeout(() => remove(node, closeToken), 260);
+      root.setTimeout(() => remove(node, closeToken, id), 260);
     });
     node.append(icon, copy, close);
     container().appendChild(node);
     current = node;
+    currentId = id;
     root.setTimeout(() => {
       if (token !== generation) return;
       node.classList.add("is-leaving");
-      root.setTimeout(() => remove(node, token), 320);
+      root.setTimeout(() => remove(node, token, id), 320);
     }, 4000);
   }
   function unlock(id) {
     if (!ACHIEVEMENTS[id] || isUnlocked(id)) return false;
     unlocked[id] = Date.now();
     save();
-    queue.push(id);
+    if (!pending.includes(id)) {
+      pending.push(id);
+      savePending();
+    }
     showNext();
     return true;
   }
   function reset() {
     unlocked = {};
-    queue = [];
+    pending = [];
     generation++;
     current = null;
+    currentId = null;
     try {
       root.localStorage.removeItem(KEY);
+      root.localStorage.removeItem(PENDING_KEY);
     } catch {}
     const node = document.getElementById("achievement-toasts");
     if (node) node.replaceChildren();
   }
-  root.AchievementSystem = { unlock, isUnlocked, reset, ACHIEVEMENTS, KEY };
+  root.AchievementSystem = {
+    unlock,
+    isUnlocked,
+    reset,
+    pending: () => pending.slice(),
+    ACHIEVEMENTS,
+    KEY,
+    PENDING_KEY,
+  };
   if (
     root.location &&
     new URLSearchParams(root.location.search).get("resetAchievements") === "1"
   )
     reset();
+  showNext();
 })(typeof window !== "undefined" ? window : globalThis);
