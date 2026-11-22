@@ -2128,3 +2128,111 @@ test("较多既有收藏不会挤掉新增物品回执，奖励可在完整调�
   assert.ok(a.state().clues.some((c) => c.id === 'found-return-receipt'));
   assert.equal(a.state().clues.filter((c) => c.id.startsWith('existing-')).length, 100);
 });
+
+test("成就：首次访问持久化，刷新后不再重复弹出", (t) => {
+  const local = memory();
+  const a = boot(t, "index", local);
+  assert.ok(a.w.AchievementSystem.isUnlocked("first-visit"));
+  assert.equal(a.d.querySelectorAll(".achievement-toast").length, 1);
+  assert.match(a.$(".achievement-toast").textContent, /初来乍到/);
+  const b = boot(t, "index", local);
+  assert.equal(b.d.querySelectorAll(".achievement-toast").length, 0);
+  assert.ok(b.w.AchievementSystem.isUnlocked("first-visit"));
+});
+
+test("成就：多个解锁依次排队，同一时刻只有一条提示", (t) => {
+  const a = boot(t, "index", memory());
+  a.w.AchievementSystem.unlock("first-search");
+  a.w.AchievementSystem.unlock("collector");
+  assert.equal(a.d.querySelectorAll(".achievement-toast").length, 1);
+  assert.equal(a.$(".achievement-toast").dataset.achievement, "first-visit");
+  a.tick();
+  a.tick();
+  assert.equal(a.d.querySelectorAll(".achievement-toast").length, 1);
+  assert.equal(a.$(".achievement-toast").dataset.achievement, "first-search");
+  a.tick();
+  a.tick();
+  assert.equal(a.$(".achievement-toast").dataset.achievement, "collector");
+});
+
+test("成就：?resetAchievements=1 与控制台 reset 都能重置", (t) => {
+  const local = memory();
+  const a = boot(t, "index", local);
+  a.w.AchievementSystem.unlock("collector");
+  const b = boot(t, "index", local, memory(), "?resetAchievements=1");
+  assert.equal(b.w.AchievementSystem.isUnlocked("collector"), false);
+  assert.equal(b.d.querySelectorAll(".achievement-toast").length, 1);
+  assert.equal(b.$(".achievement-toast").dataset.achievement, "first-visit");
+  b.w.AchievementSystem.reset();
+  assert.equal(b.d.querySelectorAll(".achievement-toast").length, 0);
+  assert.equal(local.getItem("arg-laf-achievements-v1"), null);
+});
+
+test("成就：主站搜索、转录说明、旧网页和收藏接线在真实交互上触发", (t) => {
+  const a = boot(t, "index", memory());
+  a.search("胶卷");
+  assert.ok(a.w.AchievementSystem.isUnlocked("first-search"));
+  a.click('[data-item="0810"]');
+  const details = a.$(".source-details");
+  details.open = true;
+  details.dispatchEvent(new a.w.Event("toggle"));
+  assert.ok(a.w.AchievementSystem.isUnlocked("found-transcript"));
+  a.click(".source-details [data-source]");
+  assert.ok(a.w.AchievementSystem.isUnlocked("old-archive"));
+  a.$("#modal").close();
+  a.click('[data-save-record="0810"]');
+  assert.ok(a.w.AchievementSystem.isUnlocked("collector"));
+});
+
+test("成就：游客区、员工登录、旧柜与原件副本核对接线在成功分支触发", (t) => {
+  const local = memory(),
+    session = memory();
+  const guest = boot(t, "danny", local, session);
+  assert.ok(guest.w.AchievementSystem.isUnlocked("danny-visitor"));
+  const site = cabinet(t, local, session);
+  for (const id of ["employee-pass", "workbox", "private-search", "old-cabinet"])
+    assert.ok(site.w.AchievementSystem.isUnlocked(id), id);
+  compare(site);
+  assert.ok(site.w.AchievementSystem.isUnlocked("compare-materials"));
+  assert.ok(site.w.AchievementSystem.isUnlocked("original-copy"));
+});
+
+test("成就：两种终局确认与线索辅助在成功分支触发", (t) => {
+  function readyStore(local) {
+    const s = boot(t, "index", local).w.ZHAOHUI_JOURNEY;
+    s.update((state) => {
+      if (!state.flags.includes("staff")) state.flags.push("staff");
+      if (!state.clues.some((c) => c.id === "anomaly"))
+        state.clues.push({ id: "anomaly", kind: "page", title: "附件", source: "测试", summary: "测试" });
+    });
+  }
+  const signed = memory();
+  readyStore(signed);
+  const a = boot(t, "index", signed, memory(), "#application");
+  a.set("#match-toggle", "");
+  a.click("#match-toggle");
+  assert.ok(a.w.AchievementSystem.isUnlocked("clue-assist"));
+  a.set("#claim-form [name=name]", "测试者");
+  a.submit("#claim-form");
+  a.click("#confirm-choice");
+  assert.ok(a.w.AchievementSystem.isUnlocked("final-sign"));
+  const left = memory();
+  readyStore(left);
+  const b = boot(t, "index", left, memory(), "#application");
+  b.click("#leave");
+  b.click("#confirm-choice");
+  assert.ok(b.w.AchievementSystem.isUnlocked("final-abandon"));
+});
+
+test("成就：蓝玻璃珠链接与便笺汇合点分别解锁两个网址相关成就", (t) => {
+  const local = memory();
+  const a = boot(t, "index", local);
+  a.click("#intro-skip");
+  describeFound(a);
+  offerFound(a, "packet");
+  assert.ok(a.$(".found-suggestion-link[href='danny.html#journal--return-note']"));
+  a.click(".found-suggestion-link[href='danny.html#journal--return-note']");
+  assert.ok(a.w.AchievementSystem.isUnlocked("blue-marble"));
+  const site = boot(t, "danny", local, memory(), "#journal--return-note");
+  assert.ok(site.w.AchievementSystem.isUnlocked("found-url"));
+});
