@@ -2409,3 +2409,17 @@ test("成就：退出 Danny 员工模式只清除会话，不重置成就或待�
   assert.deepEqual(Array.from(a.w.AchievementSystem.pending()).slice(0, before.length), before);
   assert.ok(a.d.querySelectorAll(".achievement-toast").length > 0);
 });
+
+test("失物登记：16 件物品都映射到对应的图片路径", (t) => {
+  const ids = Array.from({ length: 16 }, (_, i) => "08" + String(16 - i).padStart(2, "0"));
+  assert.equal(data.items.length, 16);
+  for (const id of ids) {
+    const item = data.items.find((x) => x.id === id);
+    assert.ok(item, id);
+    assert.equal(item.image, "../assets/images/lost-items/" + id + ".png");
+  }
+  assert.deepEqual(
+    data.items.map((x) => x.id).sort(),
+    ids.slice().sort(),
+  );
+});

@@ -66,6 +66,12 @@ function buildSite(destination = path.join(root, "_site")) {
     fs.mkdirSync(path.dirname(path.join(out, image)), { recursive: true });
     fs.copyFileSync(path.join(root, image), path.join(out, image));
   }
+  const lostItemImagesDir = path.join(root, "assets", "images");
+  if (fs.existsSync(lostItemImagesDir)) {
+    fs.cpSync(lostItemImagesDir, path.join(out, "assets", "images"), {
+      recursive: true,
+    });
+  }
   const revision = hash(
     JSON.stringify(manifest) +
       fs

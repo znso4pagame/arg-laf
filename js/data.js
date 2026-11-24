@@ -755,6 +755,7 @@
         description: "内有卡片与两张公交票，外侧有一道浅划痕。",
         keywords: ["皮夹", "钱夹", "公交", "旧馆站"],
         date: "2024-03-14",
+        image: "../assets/images/lost-items/0816.png",
         archive: false,
       },
       {
@@ -765,6 +766,7 @@
         description: "三把钥匙，浅色圆形钥匙扣。旧馆站服务亭已联系移交。",
         keywords: ["门匙", "钥匙扣", "地铁", "旧馆"],
         date: "2024-03-14",
+        image: "../assets/images/lost-items/0815.png",
         archive: false,
       },
       {
@@ -775,6 +777,7 @@
         description: "充电盒有轻微划痕，夹在一本蓝灰色展览小书里。",
         keywords: ["蓝牙", "headphones", "airpods", "图书馆", "展览", "旧书"],
         date: "2024-03-14",
+        image: "../assets/images/lost-items/0814.png",
         archive: false,
       },
       {
@@ -785,6 +788,7 @@
         description: "蓝色挂绳，背面印有旧馆展览纪念字样。个人信息已遮挡。",
         keywords: ["学生证", "校园卡", "卡片", "蓝色", "旧馆"],
         date: "2024-03-14",
+        image: "../assets/images/lost-items/0813.png",
         archive: false,
       },
       {
@@ -795,6 +799,7 @@
         description: "伞柄刻了一个字母 M，未留联系方式。",
         keywords: ["伞", "下雨", "候车亭", "蓝色"],
         date: "2024-03-14",
+        image: "../assets/images/lost-items/0812.png",
         archive: false,
       },
       {
@@ -805,6 +810,7 @@
         description: "折成两层，夹着一张未写完的购物清单。",
         keywords: ["围脖", "毛线", "灰色"],
         date: "2024-03-14",
+        image: "../assets/images/lost-items/0811.png",
         archive: false,
       },
       {
@@ -815,6 +821,7 @@
         description: "空套，背带留有白色涂料，登记由旧网页转录。",
         keywords: ["胶卷", "相机套", "摄影", "旧馆", "Harrow House", "Danny"],
         date: "2024-03-13",
+        image: "../assets/images/lost-items/0810.png",
         archive: true,
       },
       {
@@ -825,6 +832,7 @@
         description: "蓝灰封面，第十七页夹着馆务便签。",
         keywords: ["书本", "展览", "美术馆", "画廊"],
         date: "2024-03-13",
+        image: "../assets/images/lost-items/0809.png",
         archive: false,
       },
       {
@@ -835,6 +843,7 @@
         description: "塑料边角发黄，内页已取出，编号留在来源登记。",
         keywords: ["工牌", "卡套", "0417", "旧馆", "Harrow House", "Danny"],
         date: "2024-03-13",
+        image: "../assets/images/lost-items/0808.png",
         archive: true,
       },
       {
@@ -845,6 +854,7 @@
         description: "背面写着一个个人网页的存档位置。",
         keywords: ["门票", "车票", "展览", "旧馆", "Harrow House", "Danny"],
         date: "2024-03-13",
+        image: "../assets/images/lost-items/0807.png",
         archive: true,
       },
       {
@@ -855,6 +865,7 @@
         description: "袋内只有空纸盒，没有身份信息。",
         keywords: ["袋子", "手提袋", "米色"],
         date: "2024-03-13",
+        image: "../assets/images/lost-items/0806.png",
         archive: false,
       },
       {
@@ -865,6 +876,7 @@
         description: "收信地址空白，邮票已贴。",
         keywords: ["卡片", "邮寄", "风景"],
         date: "2024-03-13",
+        image: "../assets/images/lost-items/0805.png",
         archive: false,
       },
       {
@@ -875,6 +887,7 @@
         description: "杯盖猫咪图案掉漆，杯底贴着一张值勤便笺。",
         keywords: ["保温杯", "杯子", "猫咪", "绿色"],
         date: "2024-03-12",
+        image: "../assets/images/lost-items/0804.png",
         archive: true,
       },
       {
@@ -885,6 +898,7 @@
         description: "电池仓空着，天线可以收拢。",
         keywords: ["广播", "电台", "红色"],
         date: "2024-03-12",
+        image: "../assets/images/lost-items/0803.png",
         archive: false,
       },
       {
@@ -895,6 +909,7 @@
         description: "与一册蓝灰封面书一起交回，卡上保留 E. Rook 字样。",
         keywords: ["Elias Rook", "E. Rook", "施工史", "美术馆"],
         date: "2024-03-12",
+        image: "../assets/images/lost-items/0802.png",
         archive: true,
       },
       {
@@ -905,6 +920,7 @@
         description: "空封套，边角印有 HH 归还批次戳。",
         keywords: ["档案袋", "牛皮纸", "封套", "HH"],
         date: "2024-03-12",
+        image: "../assets/images/lost-items/0801.png",
         archive: true,
       },
     ],

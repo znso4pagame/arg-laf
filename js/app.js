@@ -377,7 +377,10 @@
   };
   function card(item) {
     const path = iconPaths[item.type] || iconPaths.文件;
-    return `<button class="item" data-item="${esc(item.id)}"><span class="item-image"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="item-register-id">${esc(item.id)}</span></span><span class="item-body"><span class="item-title"><strong>${esc(item.name)}</strong><span class="badge">待认领</span></span><span class="item-description">${esc(item.description)}</span><span class="item-meta"><span>${esc(item.place)}</span><span>${esc(item.date)}</span></span></span></button>`;
+    const image = item.image
+      ? `<img class="item-photo" src="${esc(item.image)}" alt="${esc(item.name)} 登记照片" loading="lazy" onerror="this.parentElement.classList.add('is-fallback'); this.style.display='none';" />`
+      : "";
+    return `<button class="item" data-item="${esc(item.id)}"><span class="item-image${item.image ? "" : " is-fallback"}">${image}<svg class="item-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="item-register-id">${esc(item.id)}</span></span><span class="item-body"><span class="item-title"><strong>${esc(item.name)}</strong><span class="badge">待认领</span></span><span class="item-description">${esc(item.description)}</span><span class="item-meta"><span>${esc(item.place)}</span><span>${esc(item.date)}</span></span></span></button>`;
   }
   function renderResults(query = "") {
     displayedQuery = query;
@@ -776,7 +779,7 @@
             : "<p>转录来源：城市拾物登记窗口。暂未收到更多附件。</p>";
         modal(
           "失物详情",
-          `<h2>${esc(item.name)}</h2><p>${esc(item.description)}</p><dl class="detail-list"><dt>登记编号</dt><dd>${esc(item.id)}</dd><dt>拾获地点</dt><dd>${esc(item.place)}</dd><dt>登记日期</dt><dd>${esc(item.date)}</dd></dl><p>请先核对特征，示例登记不一定属于你。</p><details class="source-details"><summary>登记来源与转录说明</summary>${source}</details><div class="related-queries"><span>同类 / 同地点</span>${searchIndex
+          `<h2>${esc(item.name)}</h2>${item.image ? `<img class="detail-photo" src="${esc(item.image)}" alt="${esc(item.name)} 登记照片" onerror="this.style.display='none';" />` : ""}<p>${esc(item.description)}</p><dl class="detail-list"><dt>登记编号</dt><dd>${esc(item.id)}</dd><dt>拾获地点</dt><dd>${esc(item.place)}</dd><dt>登记日期</dt><dd>${esc(item.date)}</dd></dl><p>请先核对特征，示例登记不一定属于你。</p><details class="source-details"><summary>登记来源与转录说明</summary>${source}</details><div class="related-queries"><span>同类 / 同地点</span>${searchIndex
             .related([item], item.name)
             .map((q) => `<button data-search="${esc(q)}">${esc(q)}</button>`)
             .join(
