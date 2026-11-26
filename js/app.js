@@ -18,6 +18,7 @@
           "'": "&#39;",
         })[c],
     );
+  const rich = (v) => esc(v).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   let mineFilter = "all",
     selected = [],
     mineQuery = "",
@@ -69,7 +70,7 @@
     motion.enter($("#modal-body"));
   }
   function fileBody(file) {
-    return `${file.fields?.length ? `<dl class="detail-list">${file.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${file.image ? `<a href="${esc(file.image)}" target="_blank" rel="noopener"><img class="evidence-image" src="${esc(file.image)}" alt="${esc(file.title)}"></a>` : ""}${(file.body || []).map((t) => `<p>${esc(t)}</p>`).join("")}`;
+    return `${file.fields?.length ? `<dl class="detail-list">${file.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${file.image ? `<a href="${esc(file.image)}" target="_blank" rel="noopener"><img class="evidence-image" src="${esc(file.image)}" alt="${esc(file.title)}"></a>` : ""}${(file.body || []).map((t) => `<p>${rich(t)}</p>`).join("")}`;
   }
   function openFile(id) {
     const file = store.read().clues.find((x) => x.id === id);
@@ -380,7 +381,7 @@
     const image = item.image
       ? `<img class="item-photo" src="${esc(item.image)}" alt="${esc(item.name)} 登记照片" loading="lazy" onerror="this.parentElement.classList.add('is-fallback'); this.style.display='none';" />`
       : "";
-    return `<button class="item" data-item="${esc(item.id)}"><span class="item-image${item.image ? "" : " is-fallback"}">${image}<svg class="item-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="item-register-id">${esc(item.id)}</span></span><span class="item-body"><span class="item-title"><strong>${esc(item.name)}</strong><span class="badge">待认领</span></span><span class="item-description">${esc(item.description)}</span><span class="item-meta"><span>${esc(item.place)}</span><span>${esc(item.date)}</span></span></span></button>`;
+    return `<button class="item" data-item="${esc(item.id)}"><span class="item-image${item.image ? "" : " is-fallback"}">${image}<svg class="item-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="item-register-id">${esc(item.id)}</span></span><span class="item-body"><span class="item-title"><strong>${esc(item.name)}</strong><span class="badge">待认领</span></span><span class="item-description">${rich(item.description)}</span><span class="item-meta"><span>${esc(item.place)}</span><span>${esc(item.date)}</span></span></span></button>`;
   }
   function renderResults(query = "") {
     displayedQuery = query;
@@ -605,7 +606,7 @@
         )
         .join(
           "",
-        )}</div><div class="compare-toolbar"><span id="compare-count">已选 ${selected.length} / 2 份材料</span><button id="compare-files" ${selected.length !== 2 ? "disabled" : ""}>并排对照</button><button id="new-note">写一条笔记</button><button id="export-notebook">导出线索与笔记</button></div>${mineFilter !== "note" ? entries.map((c) => `<article class="notebook-card"><div class="notebook-card-head"><span>${label[c.kind]}</span><button data-star="${esc(c.id)}" aria-pressed="${c.starred}">${c.starred ? "★ 已标重点" : "☆ 标记重点"}</button></div><h3>${esc(c.title)}</h3><p>${esc(c.summary)}</p><small>来源：${esc(c.source)}</small>${c.note ? `<blockquote>我的备注：${esc(c.note)}</blockquote>` : ""}<div class="notebook-card-actions"><button data-file="${esc(c.id)}">查看副本 / 备注</button>${c.url ? `<a href="${esc(c.url)}">来源页面 &gt;&gt;</a>` : ""}<label><input type="checkbox" data-compare="${esc(c.id)}" ${selected.includes(c.id) ? "checked" : ""}> 选入对照</label></div></article>`).join("") : ""}${["all", "note", "starred"].includes(mineFilter) && mineFilter !== "starred" ? notes.map((n) => `<article class="notebook-card personal-note"><span>个人推测</span><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p><div class="notebook-card-actions"><button data-edit-note="${esc(n.id)}">修改笔记</button><button data-delete-note="${esc(n.id)}">移除笔记</button></div></article>`).join("") : ""}${!(mineFilter === "note" ? notes.length : entries.length + (mineFilter === "all" ? notes.length : 0)) ? '<div class="empty"><h3>这个分类还没有材料</h3><p>保存公开登记或阅读站内附件，取得的材料会出现在这里。</p></div>' : ""}</section>`;
+        )}</div><div class="compare-toolbar"><span id="compare-count">已选 ${selected.length} / 2 份材料</span><button id="compare-files" ${selected.length !== 2 ? "disabled" : ""}>并排对照</button><button id="new-note">写一条笔记</button><button id="export-notebook">导出线索与笔记</button></div>${mineFilter !== "note" ? entries.map((c) => `<article class="notebook-card"><div class="notebook-card-head"><span>${label[c.kind]}</span><button data-star="${esc(c.id)}" aria-pressed="${c.starred}">${c.starred ? "★ 已标重点" : "☆ 标记重点"}</button></div><h3>${esc(c.title)}</h3><p>${rich(c.summary)}</p><small>来源：${esc(c.source)}</small>${c.note ? `<blockquote>我的备注：${esc(c.note)}</blockquote>` : ""}<div class="notebook-card-actions"><button data-file="${esc(c.id)}">查看副本 / 备注</button>${c.url ? `<a href="${esc(c.url)}">来源页面 &gt;&gt;</a>` : ""}<label><input type="checkbox" data-compare="${esc(c.id)}" ${selected.includes(c.id) ? "checked" : ""}> 选入对照</label></div></article>`).join("") : ""}${["all", "note", "starred"].includes(mineFilter) && mineFilter !== "starred" ? notes.map((n) => `<article class="notebook-card personal-note"><span>个人推测</span><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p><div class="notebook-card-actions"><button data-edit-note="${esc(n.id)}">修改笔记</button><button data-delete-note="${esc(n.id)}">移除笔记</button></div></article>`).join("") : ""}${!(mineFilter === "note" ? notes.length : entries.length + (mineFilter === "all" ? notes.length : 0)) ? '<div class="empty"><h3>这个分类还没有材料</h3><p>保存公开登记或阅读站内附件，取得的材料会出现在这里。</p></div>' : ""}</section>`;
     updateChrome();
     if (animate) motion.enter($("#results"), { items: ".notebook-card" });
   }
@@ -779,7 +780,7 @@
             : "<p>转录来源：城市拾物登记窗口。暂未收到更多附件。</p>";
         modal(
           "失物详情",
-          `<h2>${esc(item.name)}</h2>${item.image ? `<img class="detail-photo" src="${esc(item.image)}" alt="${esc(item.name)} 登记照片" onerror="this.style.display='none';" />` : ""}<p>${esc(item.description)}</p><dl class="detail-list"><dt>登记编号</dt><dd>${esc(item.id)}</dd><dt>拾获地点</dt><dd>${esc(item.place)}</dd><dt>登记日期</dt><dd>${esc(item.date)}</dd></dl><p>请先核对特征，示例登记不一定属于你。</p><details class="source-details"><summary>登记来源与转录说明</summary>${source}</details><div class="related-queries"><span>同类 / 同地点</span>${searchIndex
+          `<h2>${esc(item.name)}</h2>${item.image ? `<img class="detail-photo" src="${esc(item.image)}" alt="${esc(item.name)} 登记照片" onerror="this.style.display='none';" />` : ""}<p>${rich(item.description)}</p><dl class="detail-list"><dt>登记编号</dt><dd>${esc(item.id)}</dd><dt>拾获地点</dt><dd>${esc(item.place)}</dd><dt>登记日期</dt><dd>${esc(item.date)}</dd></dl><p>请先核对特征，示例登记不一定属于你。</p><details class="source-details"><summary>登记来源与转录说明</summary>${source}</details><div class="related-queries"><span>同类 / 同地点</span>${searchIndex
             .related([item], item.name)
             .map((q) => `<button data-search="${esc(q)}">${esc(q)}</button>`)
             .join(

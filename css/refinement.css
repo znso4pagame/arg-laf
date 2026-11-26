@@ -268,6 +268,16 @@ body > .utility {
   border: 1px solid #d4e0e8;
   object-fit: cover;
 }
+
+/* 富文本重点：保持中立，只通过更粗的字重强调。 */
+.item-description strong,
+#modal-body strong,
+.entry-prose strong {
+  font-weight: 800;
+  color: inherit;
+  letter-spacing: 0.02em;
+  font-synthesis: weight;
+}
 .item-register-id {
   font:
     9px/1.4 Consolas,

@@ -2423,3 +2423,22 @@ test("失物登记：16 件物品都映射到对应的图片路径", (t) => {
     ids.slice().sort(),
   );
 });
+
+test("富文本：材料正文中 **重点** 渲染为 strong，且仍转义 HTML", (t) => {
+  const local = memory(), store = makeStore(local);
+  store.collect(data.files.camera);
+  const a = boot(t, "index", local);
+  a.click("[data-nav=mine]");
+  a.click('[data-file="camera"]');
+  assert.match(a.$("#modal-body").innerHTML, /<strong>隔了好几天<\/strong>/);
+  a.$("#modal").close();
+  store.collect({
+    ...data.files.camera,
+    id: "rich-test",
+    title: "富文本测试",
+    body: ["a < b & **c**"],
+  });
+  a.click("[data-nav=mine]");
+  a.click('[data-file="rich-test"]');
+  assert.match(a.$("#modal-body").innerHTML, /a &lt; b &amp; <strong>c<\/strong>/);
+});
