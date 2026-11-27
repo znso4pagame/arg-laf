@@ -52,6 +52,7 @@
             "'": "&#39;",
           })[c],
       );
+    const rich = (v) => esc(v).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     const flag = (id) => store.read().flags.includes(id),
       has = (id) => store.read().clues.some((c) => c.id === id),
       unlockAchievement = (id) => w.AchievementSystem?.unlock(id);
@@ -216,10 +217,10 @@
         viewport.focus({ preventScroll: true });
     }
     const body = (f) =>
-      `${f.fields?.length ? `<dl class="record-fields">${f.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${f.image ? `<div class="image-viewer"><div class="image-tools"><span>扫描附件</span><button type="button" data-zoom="-1" aria-label="缩小图片" disabled>－</button><span class="zoom-level" aria-live="polite">100%</span><button type="button" data-zoom="1" aria-label="放大图片">＋</button><button type="button" data-zoom-fit disabled>适合</button><a href="${esc(f.image)}" target="_blank" rel="noopener">原图 ↗</a></div><div class="image-viewport" tabindex="0" role="region" aria-label="扫描图片，可用加减号缩放，0 恢复适合大小"><a class="image-link" href="${esc(f.image)}" target="_blank" rel="noopener"><img src="${esc(f.image)}" alt="${esc(f.title)}"></a></div></div>` : ""}<div class="entry-prose">${(f.body || []).map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
+      `${f.fields?.length ? `<dl class="record-fields">${f.fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}${f.image ? `<div class="image-viewer"><div class="image-tools"><span>扫描附件</span><button type="button" data-zoom="-1" aria-label="缩小图片" disabled>－</button><span class="zoom-level" aria-live="polite">100%</span><button type="button" data-zoom="1" aria-label="放大图片">＋</button><button type="button" data-zoom-fit disabled>适合</button><a href="${esc(f.image)}" target="_blank" rel="noopener">原图 ↗</a></div><div class="image-viewport" tabindex="0" role="region" aria-label="扫描图片，可用加减号缩放，0 恢复适合大小"><a class="image-link" href="${esc(f.image)}" target="_blank" rel="noopener"><img src="${esc(f.image)}" alt="${esc(f.title)}"></a></div></div>` : ""}<div class="entry-prose">${(f.body || []).map((line) => `<p>${rich(line)}</p>`).join("")}</div>`;
     function listing(entries) {
       return entries.length
-        ? `<div class="entry-list">${entries.map((f) => `<article class="${has(f.id) ? "is-read" : ""}"><span class="entry-date">${esc(f.date || "旧存档")} · ${esc(f.author || "Danny")} · ${esc(f.kind === "image" ? "相片" : "文字")}<span class="read-marker" ${has(f.id) ? "" : "hidden"}>已读</span></span><h3><button data-read="${esc(f.key)}">${esc(f.title)}</button></h3><p>${esc(f.summary)}</p></article>`).join("")}</div>`
+        ? `<div class="entry-list">${entries.map((f) => `<article class="${has(f.id) ? "is-read" : ""}"><span class="entry-date">${esc(f.date || "旧存档")} · ${esc(f.author || "Danny")} · ${esc(f.kind === "image" ? "相片" : "文字")}<span class="read-marker" ${has(f.id) ? "" : "hidden"}>已读</span></span><h3><button data-read="${esc(f.key)}">${esc(f.title)}</button></h3><p>${rich(f.summary)}</p></article>`).join("")}</div>`
         : '<p class="quiet-empty">没有找到可查阅的记录。</p>';
     }
     function reader() {

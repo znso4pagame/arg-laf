@@ -2442,3 +2442,9 @@ test("富文本：材料正文中 **重点** 渲染为 strong，且仍转义 HTM
   a.click('[data-file="rich-test"]');
   assert.match(a.$("#modal-body").innerHTML, /a &lt; b &amp; <strong>c<\/strong>/);
 });
+
+test("富文本：Danny 材料正文中的 **重点** 也渲染为 strong", (t) => {
+  const a = boot(t, "danny", memory(), memory());
+  a.click('[data-read="camera"]');
+  assert.match(a.$("#reading-pane").innerHTML, /<strong>隔了好几天<\/strong>/);
+});
